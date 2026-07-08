@@ -12,12 +12,13 @@ export async function ttsRoute(app: FastifyInstance) {
           required: ["text"],
           properties: {
             text: { type: "string" },
+            fileName: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { text } = request.body as { text: string };
+      const { text, fileName } = request.body as { text: string; fileName?: string };
 
       if (!text) {
         return reply.code(400).send({ error: "text is required" });
@@ -31,7 +32,7 @@ export async function ttsRoute(app: FastifyInstance) {
           ...settings,
         });
 
-        const saved = await app.fileStorageService.saveAudio(result.audio, result.requestId);
+        const saved = await app.fileStorageService.saveAudio(result.audio, fileName ?? result.requestId);
 
         return reply.send({ requestId: result.requestId, filePath: saved.filePath });
       } catch (err) {
