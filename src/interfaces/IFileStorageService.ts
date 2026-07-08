@@ -1,4 +1,8 @@
+// src/interfaces/IFileStorageService.ts
+export interface SaveAudioResult {
+  filePath: string;
+}
+
 export interface IFileStorageService {
-  upload(key: string, data: Buffer): Promise<string>;
-  download(key: string): Promise<Buffer>;
+  saveAudio(audio: Buffer, requestId: string): Promise<SaveAudioResult>;
 }
