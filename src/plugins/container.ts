@@ -10,6 +10,8 @@ import type { IFileStorageService } from "../interfaces/IFileStorageService.js";
 import { BoxFileStorageService } from "../services/storage/BoxFileStorageService.js";
 import type { IVoiceSettingsProvider } from "../interfaces/IvoiceSettingsProvider.js";
 import { HardcodedVoiceSettingsProvider } from "../services/voiceSettings/HardcodedVoiceSettingsProvider.js";
+import type { ITranslationService } from "../interfaces/ITranslationService.js";
+import { DeepLTranslationService } from "../services/translation/DeepLTranslationService.js";
 
 export interface Secrets {
   apiKey: string;
@@ -23,6 +25,7 @@ declare module "fastify" {
     ttsService: ITextToSpeechService;
     fileStorageService: IFileStorageService;
     voiceSettingsProvider: IVoiceSettingsProvider;
+    translationService: ITranslationService;
     // decorate with concrete service implementations as they're built,
     // e.g. nlpService: INlpService, ...
   }
@@ -56,4 +59,7 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const voiceSettingsProvider = new HardcodedVoiceSettingsProvider();
   app.decorate("voiceSettingsProvider", voiceSettingsProvider);
+
+  const translationService = new DeepLTranslationService(secretsProvider);
+  app.decorate("translationService", translationService);
 });

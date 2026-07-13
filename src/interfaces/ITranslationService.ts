@@ -1,3 +1,14 @@
+export interface TranslateRequest {
+  text: string;
+  targetLanguage: string;
+  glossaryId?: string;
+  context?: string;
+}
+
+export interface TranslateResult {
+  translatedText: string;
+}
+
 export interface ITranslationService {
-  translate(text: string, targetLanguage: string): Promise<string>;
+  translate(request: TranslateRequest): Promise<TranslateResult>;
 }
