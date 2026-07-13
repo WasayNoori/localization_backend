@@ -6,7 +6,7 @@ import type {
   TranslateResult,
 } from "../../interfaces/ITranslationService.js";
 
-const DEEPL_BASE_URL = "https://api-free.deepl.com";
+const DEEPL_BASE_URL = "https://api.deepl.com";
 
 export class DeepLTranslationService implements ITranslationService {
   constructor(private readonly secretsProvider: ISecretsProvider) {}
