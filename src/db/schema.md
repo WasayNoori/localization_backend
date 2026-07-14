@@ -4,9 +4,14 @@ Covers the Postgres schema for lesson segments, translations, TTS clips, and
 QC results across the spaCy → DeepL → ElevenLabs → Box pipeline. Managed via
 Drizzle ORM (`src/db/schema.ts`).
 
-Courses and Lessons themselves live in the existing LMS/catalog system — this
-schema only stores `lesson_id` (and `course_id`) as external reference IDs,
-not full Course/Lesson tables.
+Courses and Lessons are real, interim tables in this schema (`courses`,
+`lessons` below) — a stand-in for the LCMS system another team is currently
+building. They are not placeholders: once LCMS ships, these tables remain,
+`id` values will originate from LCMS instead of being assigned manually, and
+`box_file_id` / `parsed_at` stay pipeline-owned regardless of LCMS, since
+they're facts about this pipeline's processing of a lesson, not about the
+course catalog itself. Only the population source changes (manual/internal
+today, synced or looked up from LCMS later).
 
 ## Pipeline flow this schema supports
 
@@ -40,6 +45,46 @@ glossaries (looked up by target_language, not FK-joined)
   segment text directly, or a `segment_translation`'s text.
 - A **voice_setting_template** is a named, reusable bundle of ElevenLabs
   settings, selectable by ID.
+
+---
+
+## `courses`
+
+Real, interim table — stands in for the LCMS system another team is
+building. Remains after LCMS ships; only `id`'s origin changes.
+
+| Column       | Type        | Notes                                                              |
+|--------------|-------------|------------------------------------------------------------------------|
+| `id`         | text, PK    | Plain string, not a surrogate uuid — populated directly from an LCMS-issued course ID once LCMS ships, with zero downstream migration |
+| `course_name`| text        |                                                                          |
+| `created_at` | timestamptz | default `now()`                                                        |
+| `updated_at` | timestamptz | default `now()`, bump on update                                        |
+
+---
+
+## `lessons`
+
+Real, interim table — same reasoning as `courses`. `id` is the same
+`lesson_id` string already referenced (as a bare string, no FK) by
+`lesson_segments.lesson_id` and `lesson_localizations.lesson_id`.
+
+| Column        | Type        | Notes                                                              |
+|---------------|-------------|------------------------------------------------------------------------|
+| `id`          | text, PK    | Plain string — this IS the `lesson_id` value used elsewhere in the schema |
+| `course_id`   | text, FK    | → `courses.id`. A lesson belongs to exactly one course                 |
+| `lesson_name` | text        |                                                                          |
+| `box_file_id` | text        | Box file ID of the English source script                               |
+| `parsed_at`   | timestamptz, null | Set once this lesson's script has been split into segments. Lesson-level fact, independent of any target language |
+| `created_at`  | timestamptz | default `now()`                                                        |
+| `updated_at`  | timestamptz | default `now()`, bump on update                                        |
+
+**Why no translation/audio/QC status fields here:** those are per-language
+facts and already belong to `lesson_localizations.status` and
+`tts_clips.qc_status`. Rolling them up onto `lessons` would duplicate state
+that already lives at the correct grain elsewhere.
+
+**Why `lesson_segments`/`lesson_localizations` don't get an FK to `lessons`
+yet:** they keep referencing `lesson_id` as a bare string for now, unchanged.
 
 ---
 

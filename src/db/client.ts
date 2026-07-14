@@ -1,2 +1,10 @@
-// drizzle client, instantiated behind an interface (e.g. IDatabase) and
-// decorated onto the Fastify instance from plugins/container.ts
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema.js";
+
+export type Database = ReturnType<typeof createDbClient>;
+
+export function createDbClient(connectionString: string) {
+  const client = postgres(connectionString);
+  return drizzle(client, { schema });
+}

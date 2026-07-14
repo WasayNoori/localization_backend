@@ -12,7 +12,7 @@ export class DeepLTranslationService implements ITranslationService {
   constructor(private readonly secretsProvider: ISecretsProvider) {}
 
   async translate(request: TranslateRequest): Promise<TranslateResult> {
-    const apiKey = await this.secretsProvider.getSecret("DEEPL_API_KEY");
+    const apiKey = await this.secretsProvider.getSecret("deepl-api-key");
 
     const response = await fetch(`${DEEPL_BASE_URL}/v2/translate`, {
       method: "POST",

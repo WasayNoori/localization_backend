@@ -12,7 +12,7 @@ export class ElevenLabsTtsService implements ITextToSpeechService {
   constructor(private readonly secretsProvider: ISecretsProvider) {}
 
   async synthesize(request: SynthesizeSpeechRequest): Promise<SynthesizeSpeechResult> {
-    const apiKey = await this.secretsProvider.getSecret("ELEVENLABS_API_KEY");
+    const apiKey = await this.secretsProvider.getSecret("elevenlabs-api-key");
 
     const url = `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${encodeURIComponent(request.voiceId)}`;
 

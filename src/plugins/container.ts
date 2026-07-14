@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import type { ISecretsProvider } from "../interfaces/index.js";
 import { DummySecretsProvider } from "../services/secrets/dummySecretsProvider.js";
 import { AzureKeyVaultSecretsProvider } from "../services/secrets/azureKeyVaultSecretsProvider.js";
+import { CachingSecretsProvider } from "../services/secrets/cachingSecretsProvider.js";
 import type { ITextToSpeechService } from "../interfaces/ITextToSpeechService.js";
 import { ElevenLabsTtsService } from "../services/tts/ElevenLabsTtsService.js";
 import type { IFileStorageService } from "../interfaces/IFileStorageService.js";
@@ -12,6 +13,7 @@ import type { IVoiceSettingsProvider } from "../interfaces/IvoiceSettingsProvide
 import { HardcodedVoiceSettingsProvider } from "../services/voiceSettings/HardcodedVoiceSettingsProvider.js";
 import type { ITranslationService } from "../interfaces/ITranslationService.js";
 import { DeepLTranslationService } from "../services/translation/DeepLTranslationService.js";
+import { createDbClient, type Database } from "../db/client.js";
 
 export interface Secrets {
   apiKey: string;
@@ -22,6 +24,7 @@ declare module "fastify" {
   interface FastifyInstance {
     secretsProvider: ISecretsProvider;
     secrets: Secrets;
+    db: Database;
     ttsService: ITextToSpeechService;
     fileStorageService: IFileStorageService;
     voiceSettingsProvider: IVoiceSettingsProvider;
@@ -42,14 +45,17 @@ function buildSecretsProvider(): ISecretsProvider {
 }
 
 export const container = fp(async (app: FastifyInstance) => {
-  const secretsProvider = buildSecretsProvider();
+  const secretsProvider = new CachingSecretsProvider(buildSecretsProvider());
   app.decorate("secretsProvider", secretsProvider);
 
   const [apiKey, databaseUrl] = await Promise.all([
-    secretsProvider.getSecret("API_KEY"),
-    secretsProvider.getSecret("DATABASE_URL"),
+    secretsProvider.getSecret("api-key"),
+    secretsProvider.getSecret("database-url"),
   ]);
   app.decorate("secrets", { apiKey, databaseUrl } satisfies Secrets);
+
+  const db = createDbClient(databaseUrl);
+  app.decorate("db", db);
 
   const ttsService = new ElevenLabsTtsService(secretsProvider);
   app.decorate("ttsService", ttsService);
