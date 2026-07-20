@@ -5,4 +5,5 @@ export interface SaveAudioResult {
 
 export interface IFileStorageService {
   saveAudio(audio: Buffer, requestId: string): Promise<SaveAudioResult>;
+  getFileContent(fileId: string): Promise<Buffer>;
 }

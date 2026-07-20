@@ -1,3 +1,9 @@
+export interface NlpSegmentResult {
+  sentences: string[];
+  originalLength: number;
+  grammarCorrected: boolean;
+}
+
 export interface INlpService {
-  analyze(text: string): Promise<unknown>;
+  segment(text: string, correctGrammar?: boolean): Promise<NlpSegmentResult>;
 }

@@ -1,3 +1,19 @@
+# Application Guide
+
+Purpose: A personal reference for navigating this project — translating
+unfamiliar TypeScript/Fastify/Node concepts into terms from the .NET/C#
+world, plus practical "where do I find/what did I do" notes (Azure hosting
+details, deployment locations, gotchas). This is not a design-rationale doc
+(see architecture.md) — it's the thing to open when you're lost in the
+folder structure or forget where something is deployed.
+
+Format: short sections per concept or component, written as "in C# lingo,
+this is X" comparisons where helpful, plus a running notes section for
+practical details (Azure resource names, publish profiles, known issues to
+watch for).
+
+
+
 # Plugins
 In C# Lingo, Plusins is a combination of Program.cs service registration plus Middleware for auth services. 
 

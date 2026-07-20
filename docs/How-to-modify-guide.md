@@ -1,4 +1,21 @@
-## Changing Guide
+# How to Modify Guide
+
+Purpose: "Where do I go to change X" — a map from common change requests to
+the exact file/folder to start in. Not rationale (see decisions.md), not
+what-it-does (see endpoints-guide.md) — purely where to make a change.
+
+Format:
+## To <change something>
+Start in: <file/folder path>
+Also touch: <other files affected, if any>
+
+Example entries to seed:
+## To add a new endpoint
+Start in: routes/ — add route file, register in routes/index.ts, wire any
+new service in container.ts
+
+## To change how sentences are split
+Start in: spacy-nlp-service/nlp/rules.py
 
 ### API Routes
 the routes are added to /Routes/ folder. For example tts-route.ts.  They are all registered in /Routes/index.ts. THis means that in app.ts I am only importing from Index.ts and don't have to grow it each time a route is added. 

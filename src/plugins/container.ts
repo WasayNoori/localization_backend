@@ -13,6 +13,10 @@ import type { IVoiceSettingsProvider } from "../interfaces/IvoiceSettingsProvide
 import { HardcodedVoiceSettingsProvider } from "../services/voiceSettings/HardcodedVoiceSettingsProvider.js";
 import type { ITranslationService } from "../interfaces/ITranslationService.js";
 import { DeepLTranslationService } from "../services/translation/DeepLTranslationService.js";
+import type { INlpService } from "../interfaces/INlpService.js";
+import { SpacyNlpService } from "../services/nlp/SpacyNlpService.js";
+import type { IAudioQcService } from "../interfaces/IAudioQcService.js";
+import { BasicAudioQcService } from "../services/qc/BasicAudioQcService.js";
 import { createDbClient, type Database } from "../db/client.js";
 
 export interface Secrets {
@@ -29,8 +33,9 @@ declare module "fastify" {
     fileStorageService: IFileStorageService;
     voiceSettingsProvider: IVoiceSettingsProvider;
     translationService: ITranslationService;
-    // decorate with concrete service implementations as they're built,
-    // e.g. nlpService: INlpService, ...
+    nlpService: INlpService;
+    qcService: IAudioQcService;
+    // decorate with concrete service implementations as they're built, ...
   }
 }
 
@@ -60,7 +65,7 @@ export const container = fp(async (app: FastifyInstance) => {
   const ttsService = new ElevenLabsTtsService(secretsProvider);
   app.decorate("ttsService", ttsService);
 
-  const fileStorageService = new BoxFileStorageService();
+  const fileStorageService = new BoxFileStorageService(secretsProvider);
   app.decorate("fileStorageService", fileStorageService);
 
   const voiceSettingsProvider = new HardcodedVoiceSettingsProvider();
@@ -68,4 +73,10 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const translationService = new DeepLTranslationService(secretsProvider);
   app.decorate("translationService", translationService);
+
+  const nlpService = new SpacyNlpService(env.SPACY_SERVICE_URL);
+  app.decorate("nlpService", nlpService);
+
+  const qcService = new BasicAudioQcService();
+  app.decorate("qcService", qcService);
 });
