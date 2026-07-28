@@ -5,6 +5,7 @@ export async function healthRoute(app: FastifyInstance) {
     "/health",
     {
       schema: {
+        description: "Liveness check — always returns { status: \"ok\" }, no dependencies checked.",
         tags: ["health"],
         response: {
           200: {

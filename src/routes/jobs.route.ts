@@ -8,6 +8,11 @@ export async function jobsRoute(app: FastifyInstance) {
     "/jobs/:jobId",
     {
       schema: {
+        description:
+          "Poll a course-level processing job. Returns the processing_jobs row as-is: status " +
+          "('pending' | 'running' | 'completed' | 'failed'), progress ({ succeeded, failed, total }), " +
+          "timestamps. This IS the polling endpoint for the 202 job IDs returned by course-level " +
+          "parse/generate endpoints.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",

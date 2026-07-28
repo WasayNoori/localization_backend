@@ -54,9 +54,10 @@ courses (many) ──< course_lessons >── (many) lessons
 lessons (1) ──< lesson_segments (many)
 lesson_segments (1) ──< segment_translations (many, one per target_language)
 lesson_segments (1) ──< tts_clips (many, one per language actually voiced)
-lesson_localizations (1) ──< tts_clips (many, only for translated audio)
+lesson_localizations (1) ──< tts_clips (many, every language incl. English)
 voice_setting_templates (1) ──< tts_clips (many)
 glossaries (looked up by target_language, not FK-joined)
+language_voice_settings (looked up by target_language, not FK-joined)
 ```
 
 - A **course** is a real, interim record standing in for LCMS course
@@ -70,13 +71,17 @@ glossaries (looked up by target_language, not FK-joined)
 - A **segment_translation** is DeepL's output for one segment in one target
   language. Independent of audio — exists whether or not a clip was ever
   generated from it.
-- A **lesson_localization** tracks the *translation/audio effort* for one
-  lesson into one target language (status, seed, default voice settings). It
-  does not hold segment text itself.
+- A **lesson_localization** tracks the *generation effort* for one lesson
+  into one target language (status, seed, Box destination folder). It does
+  not hold segment text, and no longer holds voice settings (see
+  `language_voice_settings`) — created for English too now.
 - A **tts_clip** is one generated audio segment — from either the English
   segment text directly, or a `segment_translation`'s text.
 - A **voice_setting_template** is a named, reusable bundle of ElevenLabs
   settings, selectable by ID.
+- A **language_voice_settings** row is the voice configuration for one
+  target language — shared by every lesson generating in that language, not
+  scoped to any one lesson.
 
 ---
 
@@ -227,24 +232,46 @@ translated — same reasoning as snapshotting voice settings on `tts_clips`.
 
 ## `lesson_localizations`
 
-Tracks the translation/audio effort for one lesson into one target language.
-Created when a translation pass is kicked off for a given lesson + language.
-**Not used for English audio** — English clips reference `lesson_segments`
-directly with no localization row (see `tts_clips` below).
+Tracks the generation effort for one lesson into one target language —
+status, seed, and Box destination folder. Voice configuration lives in
+`language_voice_settings` instead (see below): a voice is picked for a
+*language* and reused until retired, across every lesson in that language,
+not chosen per lesson. Created for English too — English has no translation
+effort, but still has a generation effort (seed/folder/status) worth
+tracking the same way.
 
 | Column                    | Type        | Notes                                                              |
 |---------------------------|-------------|------------------------------------------------------------------------|
 | `id`                      | uuid, PK    | `gen_random_uuid()`                                                    |
 | `lesson_id`               | text        | Bare string reference to `lessons.id`                                 |
-| `target_language`         | varchar(10) | **Unique together with `lesson_id`.**                                  |
-| `voice_id`                | text        | ElevenLabs voice ID used for this language's audio                    |
-| `model_id`                | text        | e.g. `eleven_multilingual_v2`                                         |
-| `tts_seed`                | integer     | Fixed seed reused across all this language's clips (best-effort only) |
-| `default_voice_settings`  | jsonb       | `{ stability, similarityBoost, style, speed, useSpeakerBoost }`        |
+| `target_language`         | varchar(10) | **Unique together with `lesson_id`.** Includes `en`.                   |
+| `tts_seed`                | integer     | Fixed seed reused across all this lesson's clips in this language (best-effort only) |
 | `box_folder_id`           | text, null  | Destination Box folder for this language's audio output               |
 | `status`                  | text        | `draft` \| `in_progress` \| `qc_review` \| `complete`                  |
 | `created_at`              | timestamptz | default `now()`                                                        |
 | `updated_at`              | timestamptz | default `now()`, bump on update                                       |
+
+---
+
+## `language_voice_settings`
+
+Voice configuration for one target language, shared by every lesson — not
+per-lesson. Matches how voices are actually managed: pick a voice for a
+language and use it until it can no longer be used (retired/expired), then
+switch to another. That switch is a language-wide event, updating this one
+row, not something done per lesson. Same shape/pattern as `glossaries`
+above. A future DeepL pronunciation dictionary ID per language belongs here
+too, not on `glossaries` (a translation concern) or `lesson_localizations`
+(a per-lesson concern).
+
+| Column            | Type            | Notes                                                             |
+|-------------------|-----------------|------------------------------------------------------------------------|
+| `target_language` | varchar(10), PK | e.g. `en`, `es`, `fr`. One row per language.                       |
+| `voice_id`        | text            | ElevenLabs voice ID currently used for this language                   |
+| `model_id`        | text            | e.g. `eleven_multilingual_v2`                                          |
+| `voice_settings`  | jsonb           | `{ stability, similarityBoost, style, speed, useSpeakerBoost }`        |
+| `created_at`      | timestamptz     | default `now()`                                                        |
+| `updated_at`      | timestamptz     | default `now()`, bump whenever the voice/settings change              |
 
 ---
 
@@ -295,7 +322,7 @@ One row per generated audio segment, in either English or a target language.
 | `id`                    | uuid, PK       | `gen_random_uuid()`                                                    |
 | `segment_id`            | uuid, FK       | → `lesson_segments.id`, `on delete cascade`. Always set.               |
 | `language`              | varchar(10)    | `en` for source audio, or a target language code                       |
-| `lesson_localization_id`| uuid, FK, null | → `lesson_localizations.id`. **Null for English clips** — English audio isn't a "localization." Set for translated clips. |
+| `lesson_localization_id`| uuid, FK, null | → `lesson_localizations.id`. Set for every clip, English included — nullable only because the column predates `lesson_localizations` covering English. |
 | `template_id`           | uuid, FK, null | → `voice_setting_templates.id`. Which template (if any) resolved `voice_settings` below |
 | `sentence_text`         | text           | Snapshot of the exact text sent to ElevenLabs (English `lesson_segments.text`, or the matching `segment_translations.translated_text`) |
 | `request_id`            | text, null     | Returned by ElevenLabs; feeds `previous_request_ids` on later clips    |
@@ -317,11 +344,11 @@ by joining `segment_id` + `language` back to `lesson_segments` or
 edited later. The snapshot preserves exactly what was spoken in *this* clip,
 independent of later edits upstream.
 
-**Why `lesson_localization_id` is nullable:** English clips are generated
-directly from `lesson_segments` with no translation step and no per-language
-tracking effort — there's nothing to localize. Only translated clips belong
-to a `lesson_localization` (for shared seed, voice defaults, and status
-tracking across that language's full clip set).
+**Why `lesson_localization_id` is nullable:** legacy only — every clip,
+including English, now belongs to a `lesson_localization` row (shared seed
+and status tracking across that lesson+language's full clip set). The
+column stays nullable because it predates that; a new clip without one
+shouldn't occur.
 
 **Why `segment_id` + `language` together (not just a translation FK):** this
 lets one clips table serve both English and translated audio without a

@@ -107,6 +107,147 @@ mapped directly to `tts_clips.qc_status` as `pass`/`fail` only —
 QC (duration validation, silence detection, a richer report shape) is
 separate, later work; chose not to speculatively design that shape now.
 
+## Box auth: Developer Token for now, not client-credentials
+`BoxFileStorageService` uses `BoxDeveloperTokenAuth` (a short-lived, ~1hr
+token from the Box dev console), not the previously-wired `BoxCcgAuth`
+(client-credentials). The dev token is what's actually available and
+validated for testing right now; client-credentials was never exercised
+against a real Box app. The token lives in `DummySecretsProvider` under
+`box-dev-token`, not `process.env`, per this project's secrets rule. Revisit
+before deploying anywhere that needs auth to outlive an hour — swap back to
+`BoxCcgAuth` (or Key Vault-backed client-credentials) once that's set up and
+validated.
+
+## Fixed TTS seed (42) + previous/next-segment stitching context
+`generateLocalizationForLesson` uses a constant seed (`42`) for every clip
+instead of a random one per call — reproducibility is still best-effort
+only (ElevenLabs doesn't guarantee seed reuse), but a shared constant is
+more useful for that than a different random value each run. Also passes
+`previousText`/`nextText` (the adjacent segment's text in the same
+language) to ElevenLabs for prosody continuity across segment boundaries.
+Neighbor text for a translated language is only included if that neighbor
+already has a `segment_translations` row — resolving it never triggers an
+extra DeepL call solely for stitching context; it's just omitted if not
+yet translated.
+
+## Box-existence reconciliation is opt-in, not automatic
+`generateLocalizationForLesson` can verify that an already-"active" clip's
+Box file still exists (`IFileStorageService.fileExists`) and, if it's gone,
+supersede that row so it flows back into the normal missing-segment
+regeneration path — no separate repair code path. This is gated behind an
+explicit `verifyBoxFiles` option (default off), not run on every call:
+checking Box for every already-done segment adds a Box API round-trip per
+segment even when nothing's wrong, which defeats the point of the
+missing-query being a cheap, DB-only check. Turn it on when Box/DB drift is
+actually suspected (e.g. a file was deleted out of band). A genuine 404
+(`BoxApiError`, has `responseInfo.statusCode`) is what counts as "gone" —
+any other error (expired token, network blip, permissions — plain
+`BoxSdkError`, no `responseInfo`) rethrows rather than being mistaken for a
+missing file, since that would wrongly trigger regeneration.
+
+## Box 404 detection: message-parsing, not `responseInfo.statusCode`
+Refines the entry above. `box-typescript-sdk-gen`'s `BoxApiError.responseInfo`
+is `undefined` at runtime in the installed version, despite the type
+declarations promising `responseInfo.statusCode` — verified against both a
+real 404 (never-existed file id) and a trashed-file 404 ("Item is trashed"),
+both showing the same undefined `responseInfo`. The only reliable signal is
+the leading HTTP status in `err.message` (e.g. `404 "Not Found"; Request
+ID: "..."`), gated on `err.constructor.name === "BoxApiError"` so a
+`BoxSdkError` (auth/network failures — no numeric prefix, e.g. an expired
+dev token) never gets mistaken for a 404. A trashed (soft-deleted, not yet
+purged) Box file also returns 404 here, which is exactly the behavior
+wanted — trashed counts as gone.
+
+## Voice settings are per-language, not per-lesson or per-lesson-shared
+Superseded the earlier "voice settings live on `lesson_localizations`"
+design (which itself had briefly considered a per-lesson-shared-across-
+languages table). Neither matched how voices are actually managed: a voice
+is picked for a *language* and reused across every lesson in that language
+until it's retired/expired, then swapped for another — a language-wide
+event, not a per-lesson one. New `language_voice_settings` table (PK
+`target_language`, same shape as `glossaries`) holds `voice_id`/`model_id`/
+`voice_settings`, shared by every lesson. `lesson_localizations` drops
+`voice_id`/`model_id`/`default_voice_settings` and keeps only what's
+genuinely per-lesson: `tts_seed`, `box_folder_id`, `status`. Also created
+for English now (a real generation effort to track — seed/folder/status —
+even without a translation effort). A future DeepL pronunciation dictionary
+ID per language belongs on `language_voice_settings` too, once built.
+
+## `force` and `voiceOverride` options on the generate function
+`generateLocalizationForLesson` gained two composable options: `force`
+supersedes every active clip for a lesson+language up front (DB-only, no
+Box calls) so the whole lesson regenerates through the normal
+missing-segment loop — for intentional full regeneration, distinct from
+`verifyBoxFiles`'s drift-detection use case. `voiceOverride` updates the
+`language_voice_settings` row for that language (affecting every lesson in
+it going forward, not just this call) and optionally this lesson's
+`tts_seed`. Pair both together to change a language's voice and immediately
+regenerate one lesson with it.
+
+## Voice settings get their own endpoint, not a generate-call option
+Supersedes `voiceOverride` on `generateLocalizationForLesson`/the generate
+endpoint (previous entry). Setting a language's voice has nothing to do
+with any specific lesson, so routing it through
+`POST /lessons/:lessonId/localizations/:targetLanguage/generate` was the
+wrong shape — it required a `lessonId` for a language-wide change. Moved to
+`PUT /languages/:targetLanguage/voice-settings`, plain CRUD upsert (same
+pattern as `POST /lessons`), no lesson involved. Every field is optional and
+merges rather than replaces — including individual keys inside
+`voiceSettings` — so setting just `{ stability }` doesn't clobber
+`style`/`speed`/etc.; omitted fields keep their current value, or fall back
+to `IVoiceSettingsProvider` defaults if the language has no row yet. The
+generate function/route dropped `voiceOverride` and the seed-override path
+that came with it entirely — `force` is still how you make an existing
+lesson pick up whatever's currently configured.
+
+## Missing-segments query extracted into `findMissingSegments`
+`generateLocalizationForLesson`'s "segments missing an active `tts_clips`
+row for this lesson+language" query moved into its own function
+(`src/services/generation/findMissingSegments.ts`), so `GET
+/courses/:courseId/localizations/:targetLanguage/status` (a new, read-only,
+no-DeepL/no-ElevenLabs reporting endpoint) can reuse the exact same
+"what's missing" logic instead of reimplementing it. `force`/`verifyBoxFiles`
+(which mutate `tts_clips` rows) stay inside `generateLocalizationForLesson`
+only — the shared function itself is a plain, side-effect-free query.
+
+## Retranslation is a standalone segment-level action, decoupled from audio
+`POST /segments/:segmentId/translations/:targetLanguage/retranslate`
+(`retranslateSegment`, `src/services/translation/retranslateSegment.ts`)
+hard-deletes the segment's `segment_translations` row and calls DeepL again,
+but never touches `tts_clips`. Translation QC is expected to be iterative
+and segment-at-a-time (infrequent, but real) — coupling it to audio
+regeneration (as the generate endpoint's `force` does for `tts_clips`) would
+mean paying for an ElevenLabs call on every QC retry, which is needlessly
+expensive. Regenerating audio from the corrected translation is a separate,
+explicit follow-up call to the existing generate endpoint (`segmentId` +
+`force: true`). The DeepL-call-plus-insert logic itself was extracted into
+`translateAndStoreSegment` (`src/services/translation/
+translateAndStoreSegment.ts`) so `generateLocalizationForLesson` and
+`retranslateSegment` share it rather than duplicating it — mirrors the
+earlier `findMissingSegments` extraction.
+
+## Glossary upsert gets its own endpoint, not folded into voice settings
+`PUT /languages/:targetLanguage/glossary` (`language-glossary.route.ts`) is
+a separate endpoint from `PUT /languages/:targetLanguage/voice-settings`,
+even though both are one-row-per-language upserts and could have been
+merged into a single "language settings" call. Glossary (DeepL/translation
+QC) and voice settings (ElevenLabs tuning) are independent concerns/actors —
+same reasoning that already justified splitting voice settings out of the
+lesson-level generate endpoint (see "Voice settings get their own endpoint"
+above) applies here too. Previously, `glossaries` rows had no upsert path in
+code at all — populated out-of-band directly in the DB.
+
+## `POST /translate` resolves its own glossary; `glossaryId` dropped from the body
+Previously `/translate` accepted an optional caller-supplied `glossaryId`,
+passed straight through to DeepL. Dropped in favor of always looking up
+`glossaries` by `targetLanguage` internally (via the new `getGlossaryId`
+helper, `src/services/translation/getGlossaryId.ts`) — a target language has
+exactly one glossary (see `PUT /languages/:targetLanguage/glossary`), so
+requiring the caller to already know and pass its id was redundant and
+error-prone. `getGlossaryId` was extracted out of
+`translateAndStoreSegment`'s inline query so both it and `/translate` share
+the same lookup rather than duplicating it.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

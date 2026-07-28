@@ -1,11 +1,18 @@
 // src/routes/translation.route.ts
 import type { FastifyInstance } from "fastify";
+import { getGlossaryId } from "../services/translation/getGlossaryId.js";
 
 export async function translationRoute(app: FastifyInstance) {
   app.post(
     "/translate",
     {
       schema: {
+        description:
+          "Stateless DeepL passthrough — translates the given text and returns the result directly. " +
+          "Automatically applies this target language's glossary (looked up from the glossaries table via " +
+          "PUT /languages/:targetLanguage/glossary) if one is configured — no glossaryId to pass in. " +
+          "Writes nothing to the database (no segment_translations row); unrelated to the lesson-level " +
+          "generate flow, which persists translations as part of resolving a lesson's segments.",
         security: [{ apiKey: [] }],
         body: {
           type: "object",
@@ -13,17 +20,15 @@ export async function translationRoute(app: FastifyInstance) {
           properties: {
             text: { type: "string" },
             targetLanguage: { type: "string" },
-            glossaryId: { type: "string" },
             context: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { text, targetLanguage, glossaryId, context } = request.body as {
+      const { text, targetLanguage, context } = request.body as {
         text: string;
         targetLanguage: string;
-        glossaryId?: string;
         context?: string;
       };
 
@@ -32,6 +37,8 @@ export async function translationRoute(app: FastifyInstance) {
       }
 
       try {
+        const glossaryId = await getGlossaryId(app.db, targetLanguage);
+
         const result = await app.translationService.translate({
           text,
           targetLanguage,

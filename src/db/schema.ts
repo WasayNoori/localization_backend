@@ -139,8 +139,13 @@ export interface VoiceSettingsSnapshot {
 }
 
 // Tracks the translation/audio effort for one lesson into one target
-// language (status, seed, default voice settings). Not used for English —
-// English clips reference lesson_segments directly, no localization row.
+// language (status, seed, Box destination folder). Voice configuration
+// (voice_id/model_id/voice_settings) lives in language_voice_settings
+// instead — that's a per-language, not per-lesson, concern: a voice is
+// picked for a language and reused until retired, across every lesson in
+// that language, not chosen per lesson. See docs/decisions.md. Created for
+// English too now — English has no translation effort, but still has a
+// generation effort (seed/folder/status) worth tracking the same way.
 // No course_id here — same reasoning as lesson_segments above.
 export const lessonLocalizations = pgTable(
   "lesson_localizations",
@@ -148,11 +153,8 @@ export const lessonLocalizations = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     lessonId: text("lesson_id").notNull(),
     targetLanguage: varchar("target_language", { length: 10 }).notNull(),
-    voiceId: text("voice_id").notNull(),
-    modelId: text("model_id").notNull(),
     // Best-effort reproducibility only — ElevenLabs seed reuse isn't guaranteed.
     ttsSeed: integer("tts_seed").notNull(),
-    defaultVoiceSettings: jsonb("default_voice_settings").$type<VoiceSettingsSnapshot>().notNull(),
     boxFolderId: text("box_folder_id"),
     // 'draft' | 'in_progress' | 'qc_review' | 'complete'
     status: text("status").notNull(),
@@ -193,6 +195,22 @@ export const glossaries = pgTable("glossaries", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Voice configuration for one target language, shared by every lesson —
+// not per-lesson. A voice is picked for a language and reused until it's
+// retired, then swapped for another; that swap is a language-wide event,
+// not scoped to any one lesson. Same shape/pattern as glossaries above — a
+// future DeepL pronunciation dictionary id per language belongs here too,
+// not on glossaries (a translation concern) or lesson_localizations (a
+// per-lesson concern).
+export const languageVoiceSettings = pgTable("language_voice_settings", {
+  targetLanguage: varchar("target_language", { length: 10 }).primaryKey(),
+  voiceId: text("voice_id").notNull(),
+  modelId: text("model_id").notNull(),
+  voiceSettings: jsonb("voice_settings").$type<VoiceSettingsSnapshot>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // One row per generated audio segment, in either English or a target
 // language. Soft regeneration: a failed/superseded attempt isn't
 // overwritten, a new row is inserted with an incremented generationAttempt.
@@ -204,7 +222,10 @@ export const ttsClips = pgTable(
       .notNull()
       .references(() => lessonSegments.id, { onDelete: "cascade" }),
     language: varchar("language", { length: 10 }).notNull(),
-    // Null for English clips — English audio isn't a "localization".
+    // Set for every clip, English included — lesson_localizations now tracks
+    // per-lesson generation effort (seed/folder/status) for every language,
+    // not just translated ones. Nullable only because this column predates
+    // that; a clip without one shouldn't occur going forward.
     lessonLocalizationId: uuid("lesson_localization_id").references(() => lessonLocalizations.id),
     templateId: uuid("template_id").references(() => voiceSettingTemplates.id),
     // Snapshot of the exact text sent to ElevenLabs — the source segment or
