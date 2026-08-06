@@ -248,6 +248,31 @@ error-prone. `getGlossaryId` was extracted out of
 `translateAndStoreSegment`'s inline query so both it and `/translate` share
 the same lookup rather than duplicating it.
 
+## Lesson audio bitrate raised to 192kbps; `outputFormat` request field fixed
+`AUDIO_FORMAT` in `generateLocalizationForLesson.ts` moved from
+`mp3_44100_128` to `mp3_44100_192` (account confirmed on ElevenLabs `pro`
+tier, which supports 192kbps). While making the change, found
+`ElevenLabsTtsService.synthesize` accepted `request.outputFormat` on the
+interface but never appended it to the request URL — ElevenLabs was always
+returning its default bitrate regardless of what callers passed. Fixed by
+appending `?output_format=...` to the URL when the field is set.
+
+## `POST /tts/test` — raw-audio test endpoint, no persistence
+Added a second TTS ad-hoc route alongside `/tts/synthesize` specifically for
+exercising a standalone test frontend (voice/model/settings/continuity
+experiments). Kept as its own endpoint rather than a mode flag on
+`/tts/synthesize` since the actor and intent differ (manual testing vs.
+Box-backed one-off generation) and the response shape differs (raw audio
+bytes vs. a Box file record). Deliberately writes nothing — no Box upload,
+no `tts_clips` row — since it's throwaway by design. `voiceId`/`modelId` are
+explicit body fields (not pulled from `IVoiceSettingsProvider`) so the
+frontend can freely test combinations without touching stored defaults.
+`previousRequestIds` reuses the existing `SynthesizeSpeechRequest` field:
+empty on a caller's first request, then populated with the `requestId`
+returned by the prior call (returned via `x-request-id` response header,
+since the body is raw audio) to chain ElevenLabs voice continuity across a
+test session.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

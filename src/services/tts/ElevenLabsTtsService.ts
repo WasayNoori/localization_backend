@@ -14,7 +14,9 @@ export class ElevenLabsTtsService implements ITextToSpeechService {
   async synthesize(request: SynthesizeSpeechRequest): Promise<SynthesizeSpeechResult> {
     const apiKey = await this.secretsProvider.getSecret("elevenlabs-api-key");
 
-    const url = `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${encodeURIComponent(request.voiceId)}`;
+    const url = `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${encodeURIComponent(request.voiceId)}${
+      request.outputFormat ? `?output_format=${encodeURIComponent(request.outputFormat)}` : ""
+    }`;
 
     const response = await fetch(url, {
       method: "POST",

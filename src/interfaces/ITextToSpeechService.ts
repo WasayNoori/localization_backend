@@ -17,7 +17,7 @@ export interface SynthesizeSpeechRequest {
   /** Request IDs from prior calls, for voice continuity (max 3). */
   previousRequestIds?: string[];
 
-  outputFormat?: string; // e.g. "mp3_44100_128"
+  outputFormat?: string; // e.g. "mp3_44100_192"
 }
 
 export interface SynthesizeSpeechResult {

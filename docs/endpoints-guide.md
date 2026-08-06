@@ -210,3 +210,33 @@ now holds audio synthesized from the discarded translation). To regenerate
 audio once satisfied with the new translation, call
 `POST /lessons/:lessonId/localizations/:targetLanguage/generate` with
 `segmentId` + `force: true`.
+
+---
+
+## `POST /tts/test`
+
+Sync — thin route, calls `ttsService.synthesize` directly (same
+`ITextToSpeechService` the pipeline uses). Built for manual testing against
+a standalone frontend: exercising voice/model/settings combinations and
+ElevenLabs' request-continuity feature without going through the
+lesson/segment pipeline.
+
+Body: `{ text, voiceId, modelId, voiceSettings, previousText?, nextText?,
+seed?, previousRequestIds?, outputFormat? }` — `voiceSettings` is the full
+`VoiceSettings` shape (`stability`, `similarityBoost`, `style?`,
+`useSpeakerBoost?`, `speed?`). `outputFormat` defaults to `mp3_44100_192`
+(see `docs/decisions.md`). `previousRequestIds` (max 3) is empty on a
+caller's first request; populate it with the `requestId` returned by a
+prior call to chain voice continuity across a multi-turn test session.
+
+Response is the **raw audio bytes** (`Content-Type` from ElevenLabs,
+normally `audio/mpeg`), not JSON — play or download directly from the
+response body. The ElevenLabs `requestId` comes back in the `x-request-id`
+response header (not the body) so it doesn't need parsing out of an audio
+stream. `502 UpstreamError` (JSON) on ElevenLabs failure.
+
+**Deliberately writes nothing** — no Box upload, no `tts_clips` row, no
+lesson/segment association. Not for pipeline use; see `POST
+/tts/synthesize` for the Box-backed one-off equivalent and
+`POST /lessons/:lessonId/localizations/:targetLanguage/generate` for the
+persisted pipeline path.

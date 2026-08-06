@@ -17,7 +17,7 @@ import type { IVoiceSettingsProvider } from "../../interfaces/IvoiceSettingsProv
 import { findMissingSegments } from "./findMissingSegments.js";
 import { translateAndStoreSegment } from "../translation/translateAndStoreSegment.js";
 
-const AUDIO_FORMAT = "mp3_44100_128";
+const AUDIO_FORMAT = "mp3_44100_192";
 // Fixed rather than random: ElevenLabs seed reuse is best-effort only, but a
 // shared constant across every clip is more useful for consistency than a
 // different random value per call.

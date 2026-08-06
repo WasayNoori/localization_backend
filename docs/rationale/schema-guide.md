@@ -330,7 +330,7 @@ One row per generated audio segment, in either English or a target language.
 | `voice_id`              | text           | Snapshot                                                                |
 | `model_id`              | text           | Snapshot                                                                |
 | `voice_settings`        | jsonb          | Snapshot of stability/similarity/style/speed at generation time        |
-| `audio_format`          | text           | e.g. `mp3_44100_128`                                                    |
+| `audio_format`          | text           | e.g. `mp3_44100_192`                                                    |
 | `box_file_id`           | text, null     | Box file ID once uploaded                                              |
 | `box_file_path`         | text, null     | Human-readable path, for debugging without a Box API call             |
 | `qc_status`             | text           | `pending` \| `pass` \| `warn` \| `fail` \| `manual_review` \| `superseded` |
