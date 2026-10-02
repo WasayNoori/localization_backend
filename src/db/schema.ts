@@ -34,7 +34,17 @@ export const courses = pgTable("courses", {
 export const lessons = pgTable("lessons", {
   id: text("id").primaryKey(),
   lessonName: text("lesson_name").notNull(),
-  // Nullable: a lesson can exist before its English script is uploaded to Box.
+  // Short learner-facing summary shown under the lesson title on the platform.
+  description: text("description"),
+  // Full English script. Source of truth for parsing while the Box folder
+  // structure is undecided — see docs/decisions.md ("Script text lives in the DB").
+  scriptText: text("script_text"),
+  // Bumped only when script_text actually changes. script_updated_at >
+  // parsed_at means existing segments were cut from an older script.
+  scriptUpdatedAt: timestamp("script_updated_at", { withTimezone: true }),
+  // Box file ID of the English source script. Nullable and optional: kept as
+  // the future pointer once the Box structure is settled; parsing only falls
+  // back to it when script_text is null.
   boxFileId: text("box_file_id"),
   lcmsLessonId: text("lcms_lesson_id").unique(),
   // Set (and overwritten) every time this lesson's script is parsed into
@@ -45,12 +55,37 @@ export const lessons = pgTable("lessons", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Many-to-many: a lesson can belong to more than one course.
+// A course's ordered sections ("Section 1 - Introduction to Simulation").
+// Sections belong to one course; lessons attach to a section through
+// course_lessons, since a lesson can sit in different sections of
+// different courses.
+export const courseSections = pgTable(
+  "course_sections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: text("course_id").notNull().references(() => courses.id),
+    // 1-based display order within the course.
+    sectionIndex: integer("section_index").notNull(),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    courseSectionIdx: uniqueIndex("course_sections_course_index_idx").on(table.courseId, table.sectionIndex),
+  })
+);
+
+// Many-to-many: a lesson can belong to more than one course. Placement
+// (section + order) is per course membership, so it lives here, not on lessons.
 export const courseLessons = pgTable(
   "course_lessons",
   {
     courseId: text("course_id").notNull().references(() => courses.id),
     lessonId: text("lesson_id").notNull().references(() => lessons.id),
+    // Nullable so pre-existing membership rows stay valid; set by course import.
+    sectionId: uuid("section_id").references(() => courseSections.id),
+    // 1-based order of the lesson within its section.
+    position: integer("position"),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.courseId, table.lessonId] }),

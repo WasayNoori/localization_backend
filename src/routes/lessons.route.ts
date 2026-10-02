@@ -57,10 +57,10 @@ export async function lessonsRoute(app: FastifyInstance) {
     {
       schema: {
         description:
-          "Parses a lesson's English script (fetched from Box via boxFileId) into lesson_segments via " +
+          "Parses a lesson's English script (lessons.script_text, falling back to Box via boxFileId) into lesson_segments via " +
           "spaCy — one transaction, rewriting all segments for the lesson. Re-parsing is destructive: it " +
           "cascades to delete existing segment_translations/tts_clips for this lesson across every " +
-          "language. Requires boxFileId to already be set (POST /lessons first).",
+          "language. Requires scriptText (POST /courses/import) or boxFileId to be set.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",

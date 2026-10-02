@@ -14,6 +14,14 @@ Example entries to seed:
 Start in: routes/ — add route file, register in routes/index.ts, wire any
 new service in container.ts
 
+## To change how a course/section/lesson structure is loaded
+Start in: src/services/catalog/importCourseStructure.ts
+Also touch: src/routes/courses.route.ts (request schema), src/db/schema.ts
+(courses, course_sections, course_lessons, lessons)
+
+## To change where parse reads the script from
+Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
+
 ## To change how sentences are split
 Start in: spacy-nlp-service/nlp/rules.py
 

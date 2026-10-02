@@ -18,8 +18,8 @@ export interface ParseLessonResult {
 }
 
 /**
- * Parses a lesson's English script into lesson_segments: fetches the script
- * from Box, splits it via spaCy, and rewrites lesson_segments for this
+ * Parses a lesson's English script into lesson_segments: reads the script
+ * (lessons.script_text, falling back to Box via box_file_id), splits it via spaCy, and rewrites lesson_segments for this
  * lesson inside one transaction. Re-parsing always replaces prior segments,
  * cascading to delete their segment_translations/tts_clips — a deliberate,
  * destructive, expensive-to-redo operation (see docs/decisions.md).
@@ -31,12 +31,7 @@ export async function parseLessonSegments(deps: ParseLessonDeps, lessonId: strin
   if (!lesson) {
     throw new Error(`No lesson with id "${lessonId}"`);
   }
-  if (!lesson.boxFileId) {
-    throw new Error(`Lesson "${lessonId}" has no box_file_id set — nothing to parse`);
-  }
-
-  const fileBuffer = await deps.fileStorageService.getFileContent(lesson.boxFileId);
-  const text = fileBuffer.toString("utf-8");
+  const text = await loadScriptText(deps, lesson);
 
   const { sentences } = await deps.nlpService.segment(text);
   const parsedAt = new Date();
@@ -58,4 +53,22 @@ export async function parseLessonSegments(deps: ParseLessonDeps, lessonId: strin
   });
 
   return { lessonId, segmentCount: sentences.length, parsedAt };
+}
+
+/**
+ * script_text in the DB is the source of truth; box_file_id is only a
+ * fallback until the Box folder structure is settled (docs/decisions.md).
+ */
+async function loadScriptText(
+  deps: ParseLessonDeps,
+  lesson: typeof lessons.$inferSelect
+): Promise<string> {
+  if (lesson.scriptText !== null) {
+    return lesson.scriptText;
+  }
+  if (lesson.boxFileId) {
+    const fileBuffer = await deps.fileStorageService.getFileContent(lesson.boxFileId);
+    return fileBuffer.toString("utf-8");
+  }
+  throw new Error(`Lesson "${lesson.id}" has neither script_text nor box_file_id — nothing to parse`);
 }

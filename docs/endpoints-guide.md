@@ -41,15 +41,51 @@ calling `POST /lessons/:lessonId/parse`. Returns the created row with `201`;
 
 ---
 
+## `POST /courses/import`
+
+Sync — loads or refreshes a whole course structure in one transaction.
+Logic in `importCourseStructure` (`src/services/catalog/
+importCourseStructure.ts`), DB only. Body:
+`{ id, courseName, sections: [{ sectionIndex, title, lessons: [{ id,
+lessonName, description?, scriptText? }] }] }` — sections and lessons in
+display order (array position becomes `course_lessons.position`).
+
+- Idempotent upsert: course by `id`, sections by `(course_id,
+  section_index)`, lessons by `id`. The payload is the complete structure —
+  sections and memberships missing from it are removed from this course.
+  Lessons are never deleted (they may belong to other courses and own
+  segments/audio).
+- Omitting `scriptText` leaves an existing script untouched. A changed
+  script bumps `script_updated_at` only — never re-parses.
+- Returns `{ courseId, sectionCount, lessonCount, lessonsCreated,
+  lessonsUpdated, scriptsChanged, needsReparse }`. `needsReparse` = changed
+  scripts on already-parsed lessons; calling parse on those is the caller's
+  explicit choice, since re-parse wipes translations and audio.
+- `400` on duplicate `sectionIndex` or a lesson id repeated within the
+  course. Body limit raised to 20 MB for full-course scripts.
+
+---
+
+## `GET /courses/:courseId`
+
+Sync, read-only — `getCourseStructure` (`src/services/catalog/
+getCourseStructure.ts`). Returns ordered sections → ordered lessons, each
+with `hasScript`, `boxFileId`, `parsedAt`, `segmentCount`, and `parseStale`
+(script changed since last parse). Lessons in the course with no section
+appear in `unsectionedLessons`. 404 if `courseId` doesn't exist.
+
+---
+
 ## `POST /lessons/:lessonId/parse`
 
 Sync — lesson-level scope. Thin route; all logic lives in
 `parseLessonSegments` (`src/services/parsing/parseLessonSegments.ts`):
-fetches the lesson's English script from Box via `boxFileId`, splits it via
+reads the lesson's English script from `lessons.script_text` (falling back to
+Box via `boxFileId` only when `script_text` is null), splits it via
 spaCy, and rewrites `lesson_segments` for the lesson inside one transaction
 (cascading to delete existing `segment_translations`/`tts_clips` — see
 `docs/decisions.md` on re-parse being destructive). Requires the lesson to
-already exist with a `boxFileId` set (`POST /lessons` first). Returns
+have `script_text` (via `POST /courses/import`) or a `boxFileId`. Returns
 `{ lessonId, segmentCount, parsedAt }`.
 
 ---

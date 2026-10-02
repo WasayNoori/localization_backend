@@ -42,11 +42,23 @@ scope is where the job boundary sits:
    success is real, useful information, not hidden by an overall failed
    status.
 
-**Not yet built:** this fan-out logic, and the lesson-level parse function it's
-meant to call, don't exist in code yet — only `processing_jobs` (the table)
-and `GET /jobs/:jobId` (the read side) are implemented so far. The
-lesson-level generate function described below now exists. See
-`docs/decisions.md`.
+**Not yet built:** this fan-out logic — only `processing_jobs` (the table)
+and `GET /jobs/:jobId` (the read side) are implemented so far. Both
+lesson-level functions it will call now exist (`parseLessonSegments`,
+`generateLocalizationForLesson`). See `docs/decisions.md`.
+
+---
+
+## Load + parse stage
+
+1. `POST /courses/import` upserts course → sections → lessons, storing each
+   lesson's full English script in `lessons.script_text` (no parsing).
+2. `POST /lessons/:lessonId/parse` reads `script_text` (Box via
+   `box_file_id` only as a fallback), calls spaCy, and rewrites
+   `lesson_segments` in one transaction, setting `parsed_at`.
+3. If a later import changes a parsed lesson's script, it's listed in
+   `needsReparse` and shows `parseStale` on `GET /courses/:courseId` —
+   re-parse stays an explicit call because it deletes translations/audio.
 
 ---
 

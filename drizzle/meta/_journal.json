@@ -15,6 +15,13 @@
       "when": 1784612646846,
       "tag": "0001_outstanding_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790915060067,
+      "tag": "0002_course_sections_and_scripts",
+      "breakpoints": true
     }
   ]
 }

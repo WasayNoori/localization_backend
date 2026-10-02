@@ -273,6 +273,34 @@ returned by the prior call (returned via `x-request-id` response header,
 since the body is raw audio) to chain ElevenLabs voice continuity across a
 test session.
 
+## Script text lives in the DB; Box file ID kept as a future pointer
+The Box folder structure isn't settled yet, so the full English script is
+stored on `lessons.script_text` and is what `parseLessonSegments` reads.
+`box_file_id` stays as a nullable column to point at the script's Box file
+once the structure is decided; parse only falls back to Box when
+`script_text` is null. `script_updated_at` is bumped only when the text
+actually changes, so `script_updated_at > parsed_at` flags segments cut from
+an older script — this covers whole-script edits; per-segment manual edits
+(open question below) are still unflagged.
+
+## Sections modeled as `course_sections`; placement on `course_lessons`
+Courses have ordered sections, each with ordered lessons. Sections belong to
+one course (`course_sections`, unique on `course_id, section_index`).
+Because a lesson can belong to several courses, *where* it sits (section +
+position) is a fact about the membership, so `section_id`/`position` live on
+`course_lessons`, not `lessons`. This also resolves the earlier "no ordering
+column on `course_lessons`" gap.
+
+## Course structure is imported in one call
+`POST /courses/import` takes the full course → sections → lessons (+
+scripts) tree and upserts it in one transaction, rather than separate CRUD
+calls per entity — same actor, one action (endpoint separation rule). The
+payload is authoritative for membership and sections; lessons are never
+deleted by an import. Import never parses: re-parse is destructive, so it
+stays an explicit call, guided by the `needsReparse` list in the response.
+When the BI app / LCMS becomes the source, a catalog client can build this
+same payload.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

@@ -50,7 +50,9 @@ processing logic for course scope.
 ## Entity overview
 
 ```
+courses (1) ──< course_sections (many)
 courses (many) ──< course_lessons >── (many) lessons
+course_sections (1) ──< course_lessons (many, placement within the course)
 lessons (1) ──< lesson_segments (many)
 lesson_segments (1) ──< segment_translations (many, one per target_language)
 lesson_segments (1) ──< tts_clips (many, one per language actually voiced)
@@ -112,7 +114,10 @@ is an independent block, not owned by a single course — see
 |-----------------|-------------------|------------------------------------------------------------------------|
 | `id`            | text, PK          | This IS the `lesson_id` value used elsewhere in the schema — our own stable internal id, never rekeyed |
 | `lesson_name`   | text              |                                                                          |
-| `box_file_id`   | text, null        | Box file ID of the English source script. Nullable — a lesson can exist before its script is uploaded |
+| `description`   | text, null        | Short learner-facing summary shown under the lesson title on the platform |
+| `script_text`   | text, null        | Full English script. Source of truth for parsing while the Box structure is undecided. Null until imported |
+| `script_updated_at` | timestamptz, null | Bumped only when `script_text` actually changes. `script_updated_at > parsed_at` means segments were cut from an older script (reported as `parseStale`) |
+| `box_file_id`   | text, null        | Box file ID of the English source script. Optional future pointer; parsing only falls back to it when `script_text` is null |
 | `lcms_lesson_id`| text, null, unique | Mapping to the LCMS-issued lesson id, populated once LCMS ships. Null until then |
 | `parsed_at`     | timestamptz, null | Set (and overwritten) every time this lesson's script is parsed. Re-parsing always rewrites `lesson_segments` for this lesson |
 | `created_at`    | timestamptz       | default `now()`                                                         |
@@ -162,6 +167,13 @@ than one course.
 |-------------|----------|--------------------------------------------|
 | `course_id` | text, FK | → `courses.id`. Part of composite PK        |
 | `lesson_id` | text, FK | → `lessons.id`. Part of composite PK        |
+| `section_id`| uuid, FK, null | → `course_sections.id`. Which section of this course the lesson sits in |
+| `position`  | integer, null | 1-based order of the lesson within its section |
+
+Placement lives here rather than on `lessons` because it's a fact about a
+lesson *within a course* — the same lesson can sit in different sections of
+different courses. Both columns are nullable only so pre-existing rows stay
+valid; `POST /courses/import` always sets them.
 
 Composite primary key `(course_id, lesson_id)` — prevents the same lesson
 being linked to the same course twice; no surrogate `id` needed for a pure
@@ -173,8 +185,25 @@ single correct course to denormalize once a lesson can belong to multiple
 courses; course-based filtering for segments/clips joins through
 `course_lessons` on `lesson_id` instead. See `docs/decisions.md`.
 
-**Also unresolved:** no ordering/sequence column here, so a lesson's
-position within a given course isn't modeled yet.
+---
+
+## `course_sections`
+
+A course's ordered sections (e.g. "Introduction to Simulation"). Owned by
+one course.
+
+| Column          | Type        | Notes                                                  |
+|-----------------|-------------|--------------------------------------------------------|
+| `id`            | uuid, PK    | default `gen_random_uuid()`                             |
+| `course_id`     | text, FK    | → `courses.id`                                          |
+| `section_index` | integer     | 1-based display order within the course                 |
+| `title`         | text        |                                                         |
+| `created_at`    | timestamptz | default `now()`                                         |
+| `updated_at`    | timestamptz | default `now()`, bump on update                         |
+
+Unique index on `(course_id, section_index)` — the natural key the import
+upserts on, so re-importing a course updates sections in place instead of
+duplicating them.
 
 ---
 
