@@ -81,7 +81,8 @@ called by the course-level fan-out above.
    as missing. A segment whose only prior row is `superseded` counts as
    missing again — this is what makes regeneration resumable through the
    same query. `force` short-circuits this by superseding every active clip
-   up front (DB-only), so the whole lesson counts as missing this pass —
+   in scope up front (DB-only; just that segment's clip when `segmentId` is
+   given), so everything in scope counts as missing this pass —
    for intentional full regeneration, not drift recovery. `verifyBoxFiles`
    (skipped if `force` is set) instead checks each active clip's Box file
    still exists, superseding only the ones that don't.

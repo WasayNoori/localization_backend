@@ -6,6 +6,9 @@ const envSchema = z.object({
   SECRETS_PROVIDER: z.enum(["dummy", "azure-key-vault"]).default("dummy"),
   KEY_VAULT_URL: z.string().optional(),
   SPACY_SERVICE_URL: z.string(),
+  // Default Box folder for generated audio until the Box structure is
+  // decided (docs/decisions.md). Not a secret — a folder id.
+  BOX_AUDIO_FOLDER_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -22,6 +22,8 @@ export interface ImportSectionInput {
 export interface ImportCourseInput {
   id: string;
   courseName: string;
+  /** 'Released' | 'Draft'. Omit to leave the stored status unchanged. */
+  status?: "Released" | "Draft";
   sections: ImportSectionInput[];
 }
 
@@ -59,8 +61,15 @@ export async function importCourseStructure(db: Database, input: ImportCourseInp
   return db.transaction(async (tx) => {
     await tx
       .insert(courses)
-      .values({ id: input.id, courseName: input.courseName })
-      .onConflictDoUpdate({ target: courses.id, set: { courseName: input.courseName, updatedAt: now } });
+      .values({ id: input.id, courseName: input.courseName, status: input.status ?? null })
+      .onConflictDoUpdate({
+        target: courses.id,
+        set: {
+          courseName: input.courseName,
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          updatedAt: now,
+        },
+      });
 
     const sectionIdByIndex = new Map<number, string>();
     for (const section of input.sections) {

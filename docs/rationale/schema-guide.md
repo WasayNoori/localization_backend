@@ -96,6 +96,7 @@ building. Remains after LCMS ships; `id` itself never changes.
 |-----------------|-------------|--------------------------------------------------------------------------|
 | `id`            | text, PK    | Our own stable internal id, assigned manually today. Never rekeyed — downstream references to this id never need to change |
 | `course_name`   | text        |                                                                          |
+| `status`        | text, null  | `Released` \| `Draft`. Owned by the BI app/LCMS; set via `POST /courses/import` until a catalog sync exists |
 | `lcms_course_id`| text, null, unique | Mapping to the LCMS-issued course id, populated once LCMS ships. Null until then |
 | `created_at`    | timestamptz | default `now()`                                                         |
 | `updated_at`    | timestamptz | default `now()`, bump on update                                         |

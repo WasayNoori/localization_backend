@@ -95,17 +95,23 @@ export async function generateLocalizationForLesson(
 
   const activeSegmentIds = new Set(activeClips.map((c) => c.segmentId));
 
+  // force/verifyBoxFiles act only on the segments in scope: with segmentId,
+  // just that one segment's clip — never the rest of the lesson's audio.
+  const clipsInScope = options.segmentId
+    ? activeClips.filter((c) => c.segmentId === options.segmentId)
+    : activeClips;
+
   if (options.force) {
-    // Regenerate everything regardless of current state — supersede every
-    // active clip up front, DB-only, no Box calls. They flow into
+    // Regenerate everything in scope regardless of current state — supersede
+    // those active clips up front, DB-only, no Box calls. They flow into
     // missingSegments below through the exact same path as any other
     // missing segment, no separate "force regenerate" branch below.
-    for (const clip of activeClips) {
+    for (const clip of clipsInScope) {
       await db.update(ttsClips).set({ qcStatus: "superseded" }).where(eq(ttsClips.id, clip.id));
+      activeSegmentIds.delete(clip.segmentId);
     }
-    activeSegmentIds.clear();
   } else if (options.verifyBoxFiles) {
-    for (const clip of activeClips) {
+    for (const clip of clipsInScope) {
       if (!clip.boxFileId) {
         continue;
       }

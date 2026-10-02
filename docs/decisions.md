@@ -321,6 +321,34 @@ retranslation no longer hard-deletes first. Stale audio is detected by
 comparing the active clip's `sentence_text` to the current
 `translated_text` — no new column needed.
 
+## Read endpoints for the frontend console; course status stored locally
+The frontend's course list, course page and lesson page need data no
+endpoint served: a course list with Released/Draft status, per-language
+coverage, a lesson's segments with translation + clip state, and clip
+audio. Added `GET /courses`, coverage on `GET /courses/:courseId`,
+`GET /lessons/:lessonId/localizations/:language` and
+`GET /clips/:clipId/audio`. Status is derived in the backend (one
+definition of "audio ready" / "QC failed"), not in the UI. `courses.status`
+is a nullable local column set by import — the BI app owns the real value;
+a catalog sync replaces the manual path later without a schema change.
+Clip audio is proxied through the API rather than via Box shared links so
+the browser never touches Box.
+
+## Generate's `boxFolderId` falls back to `BOX_AUDIO_FOLDER_ID`
+Callers (the frontend) shouldn't know Box folder ids, and the Box structure
+isn't decided yet (audio goes to one interim folder, moved later by file
+id). The generate route now uses `BOX_AUDIO_FOLDER_ID` from env when the
+body omits `boxFolderId`. It's a folder id, not a secret, so env config is
+fine under the secrets rule.
+
+## `force` with `segmentId` regenerates only that segment
+Bug fix: `generateLocalizationForLesson` used to supersede every active clip
+in the lesson when `force` was set, then regenerate only `segmentId` —
+silently discarding the rest of the lesson's audio. `force` and
+`verifyBoxFiles` now act only on the clips in scope (the one segment when
+`segmentId` is given, else the whole lesson). Found while wiring the
+frontend's per-segment "Regenerate audio".
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

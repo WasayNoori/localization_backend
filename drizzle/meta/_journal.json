@@ -22,6 +22,13 @@
       "when": 1790915060067,
       "tag": "0002_course_sections_and_scripts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790979734467,
+      "tag": "0003_course_status",
+      "breakpoints": true
     }
   ]
 }

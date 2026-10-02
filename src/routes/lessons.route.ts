@@ -5,6 +5,8 @@ import { lessons } from "../db/schema.js";
 import { generateLocalizationForLesson } from "../services/generation/generateLocalizationForLesson.js";
 import { parseLessonSegments } from "../services/parsing/parseLessonSegments.js";
 import { translateLessonSegments, TranslateLessonError } from "../services/translation/translateLessonSegments.js";
+import { getLessonLocalization } from "../services/catalog/getLessonLocalization.js";
+import { env } from "../config/env.js";
 
 export async function lessonsRoute(app: FastifyInstance) {
   // Plain CRUD against `lessons` — no service/interface layer, same pattern
@@ -96,6 +98,33 @@ export async function lessonsRoute(app: FastifyInstance) {
     }
   );
 
+  app.get(
+    "/lessons/:lessonId/localizations/:language",
+    {
+      schema: {
+        description:
+          "Read-only: the lesson's segments side by side with their translation and current (non-superseded) " +
+          "clip in one language, each with status (not_translated | translated | audio_ready | qc_failed) and " +
+          "audioStale (clip spoken from different text than the current translation). For 'en' the source text " +
+          "is the translation. 404 if the lesson doesn't exist.",
+        security: [{ apiKey: [] }],
+        params: {
+          type: "object",
+          required: ["lessonId", "language"],
+          properties: { lessonId: { type: "string" }, language: { type: "string" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { lessonId, language } = request.params as { lessonId: string; language: string };
+      const result = await getLessonLocalization(app.db, lessonId, language);
+      if (!result) {
+        return reply.code(404).send({ error: "NotFound", message: `No lesson with id "${lessonId}"` });
+      }
+      return reply.send(result);
+    }
+  );
+
   app.post(
     "/lessons/:lessonId/translations/:targetLanguage",
     {
@@ -161,7 +190,7 @@ export async function lessonsRoute(app: FastifyInstance) {
           "aborting the rest, and re-calling this picks up exactly what's still missing. Requires the " +
           "lesson to already be parsed. To retranslate a single segment without paying for audio " +
           "regeneration, use POST /segments/:segmentId/translations/:targetLanguage/retranslate instead, " +
-          "then call this with segmentId + force once satisfied.",
+          "then call this with segmentId + force once satisfied. boxFolderId is optional when BOX_AUDIO_FOLDER_ID is set.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",
@@ -173,8 +202,9 @@ export async function lessonsRoute(app: FastifyInstance) {
         },
         body: {
           type: "object",
-          required: ["boxFolderId"],
           properties: {
+            // Optional: falls back to BOX_AUDIO_FOLDER_ID (env). Only used the
+            // first time a lesson+language localization is created.
             boxFolderId: { type: "string" },
             // Optional: restrict this call to one segment, for manual
             // single-segment regeneration/debugging rather than the normal
@@ -196,12 +226,19 @@ export async function lessonsRoute(app: FastifyInstance) {
         lessonId: string;
         targetLanguage: string;
       };
-      const { boxFolderId, segmentId, verifyBoxFiles, force } = request.body as {
-        boxFolderId: string;
+      const { boxFolderId: requestedFolderId, segmentId, verifyBoxFiles, force } = (request.body ?? {}) as {
+        boxFolderId?: string;
         segmentId?: string;
         verifyBoxFiles?: boolean;
         force?: boolean;
       };
+
+      const boxFolderId = requestedFolderId ?? env.BOX_AUDIO_FOLDER_ID;
+      if (!boxFolderId) {
+        return reply
+          .code(400)
+          .send({ error: "BadRequest", message: "boxFolderId is required (no BOX_AUDIO_FOLDER_ID configured)" });
+      }
 
       try {
         const result = await generateLocalizationForLesson(

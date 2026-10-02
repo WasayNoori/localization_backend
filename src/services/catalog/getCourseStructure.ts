@@ -1,7 +1,8 @@
 // src/services/catalog/getCourseStructure.ts
-import { asc, count, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { courses, courseSections, courseLessons, lessons, lessonSegments } from "../../db/schema.js";
+import { courses, courseSections, courseLessons, lessons } from "../../db/schema.js";
+import { getLocalizationCoverage, sumCoverage, type LanguageCoverage } from "./getLocalizationCoverage.js";
 
 export interface CourseStructureLesson {
   id: string;
@@ -14,6 +15,8 @@ export interface CourseStructureLesson {
   segmentCount: number;
   /** Script changed after the last parse — segments were cut from an older script. */
   parseStale: boolean;
+  /** Per-language counts; languages with no work yet are absent (treat as zero). */
+  localization: LanguageCoverage[];
 }
 
 export interface CourseStructureSection {
@@ -26,6 +29,10 @@ export interface CourseStructureSection {
 export interface CourseStructure {
   id: string;
   courseName: string;
+  status: string | null;
+  updatedAt: Date;
+  segmentCount: number;
+  coverage: (LanguageCoverage & { lessonsComplete: number })[];
   sections: CourseStructureSection[];
   /** Members not placed in any section (e.g. rows from before sections existed). */
   unsectionedLessons: CourseStructureLesson[];
@@ -54,14 +61,7 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
     .orderBy(asc(courseLessons.position), asc(lessons.id));
 
   const lessonIds = memberRows.map((m) => m.lesson.id);
-  const counts = lessonIds.length
-    ? await db
-        .select({ lessonId: lessonSegments.lessonId, n: count() })
-        .from(lessonSegments)
-        .where(inArray(lessonSegments.lessonId, lessonIds))
-        .groupBy(lessonSegments.lessonId)
-    : [];
-  const segmentCountById = new Map(counts.map((c) => [c.lessonId, Number(c.n)]));
+  const coverage = await getLocalizationCoverage(db, lessonIds);
 
   const toLesson = (m: (typeof memberRows)[number]): CourseStructureLesson => {
     const l = m.lesson;
@@ -73,14 +73,21 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
       hasScript: l.scriptText !== null,
       boxFileId: l.boxFileId,
       parsedAt: l.parsedAt,
-      segmentCount: segmentCountById.get(l.id) ?? 0,
+      segmentCount: coverage.get(l.id)!.segmentCount,
       parseStale: !!(l.parsedAt && l.scriptUpdatedAt && l.scriptUpdatedAt > l.parsedAt),
+      localization: coverage.get(l.id)!.languages,
     };
   };
+
+  const totals = sumCoverage(lessonIds.map((id) => coverage.get(id)!));
 
   return {
     id: course.id,
     courseName: course.courseName,
+    status: course.status,
+    updatedAt: course.updatedAt,
+    segmentCount: totals.segmentCount,
+    coverage: totals.languages,
     sections: sectionRows.map((s) => ({
       id: s.id,
       sectionIndex: s.sectionIndex,

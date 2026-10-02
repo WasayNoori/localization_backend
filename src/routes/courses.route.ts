@@ -9,6 +9,7 @@ import {
   type ImportCourseInput,
 } from "../services/catalog/importCourseStructure.js";
 import { getCourseStructure } from "../services/catalog/getCourseStructure.js";
+import { listCourses } from "../services/catalog/listCourses.js";
 
 const lessonImportSchema = {
   type: "object",
@@ -57,6 +58,7 @@ export async function coursesRoute(app: FastifyInstance) {
           properties: {
             id: { type: "string", minLength: 1 },
             courseName: { type: "string", minLength: 1 },
+            status: { type: "string", enum: ["Released", "Draft"] },
             sections: { type: "array", items: sectionImportSchema },
           },
         },
@@ -73,6 +75,20 @@ export async function coursesRoute(app: FastifyInstance) {
         throw err;
       }
     }
+  );
+
+  app.get(
+    "/courses",
+    {
+      schema: {
+        description:
+          "Read-only list of every course: status (Released/Draft, null until set), section/lesson/segment " +
+          "counts, and per-language coverage (translated / audioReady segment counts, lessonsComplete). " +
+          "Languages with no work yet are absent from coverage — treat as zero.",
+        security: [{ apiKey: [] }],
+      },
+    },
+    async (_request, reply) => reply.send(await listCourses(app.db))
   );
 
   app.get(

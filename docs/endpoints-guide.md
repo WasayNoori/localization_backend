@@ -46,7 +46,7 @@ calling `POST /lessons/:lessonId/parse`. Returns the created row with `201`;
 Sync — loads or refreshes a whole course structure in one transaction.
 Logic in `importCourseStructure` (`src/services/catalog/
 importCourseStructure.ts`), DB only. Body:
-`{ id, courseName, sections: [{ sectionIndex, title, lessons: [{ id,
+`{ id, courseName, status?, sections: [{ sectionIndex, title, lessons: [{ id,
 lessonName, description?, scriptText? }] }] }` — sections and lessons in
 display order (array position becomes `course_lessons.position`).
 
@@ -66,12 +66,25 @@ display order (array position becomes `course_lessons.position`).
 
 ---
 
+## `GET /courses`
+
+Sync, read-only — `listCourses` (`src/services/catalog/listCourses.ts`).
+Every course with `status` (`Released` | `Draft` | null), `sectionCount`,
+`lessonCount`, `segmentCount`, and `coverage[]` per language
+(`translated`, `audioReady` segment counts, `lessonsComplete`). Counts come
+from `getLocalizationCoverage` — three grouped queries, independent of
+course size. Languages with no work yet are absent; treat as zero.
+
+---
+
 ## `GET /courses/:courseId`
 
 Sync, read-only — `getCourseStructure` (`src/services/catalog/
 getCourseStructure.ts`). Returns ordered sections → ordered lessons, each
-with `hasScript`, `boxFileId`, `parsedAt`, `segmentCount`, and `parseStale`
-(script changed since last parse). Lessons in the course with no section
+with `hasScript`, `boxFileId`, `parsedAt`, `segmentCount`, `parseStale`
+(script changed since last parse), and `localization[]` per language. The
+course itself also carries `status`, `segmentCount` and `coverage[]` (same
+shape as `GET /courses`). Lessons in the course with no section
 appear in `unsectionedLessons`. 404 if `courseId` doesn't exist.
 
 ---
@@ -143,6 +156,20 @@ part of resolving a lesson's segments. `502 UpstreamError` on DeepL failure.
 
 ---
 
+## `GET /lessons/:lessonId/localizations/:language`
+
+Sync, read-only — `getLessonLocalization` (`src/services/catalog/
+getLessonLocalization.ts`). The lesson (`lessonName`, `description`,
+`hasScript`, `parsedAt`, `parseStale`) and its segments in order, each with
+`sourceText`, `translation` (`text`, `translatedAt`, `contextUsed`, or null),
+the current non-superseded `clip` (`id`, `qcStatus`, `qcIssues`, …, or
+null), a derived `status` (`not_translated` | `translated` | `audio_ready` |
+`qc_failed`) and `audioStale` (clip spoken from different text than the
+current translation). For `en` the source text is the translation. 404 if
+the lesson doesn't exist. This is what the frontend's lesson page renders.
+
+---
+
 ## `POST /lessons/:lessonId/translations/:targetLanguage`
 
 Sync — lesson-level "translate this lesson". `translateLessonSegments`
@@ -164,6 +191,10 @@ consistent while each translation still maps 1:1 to its segment.
 ---
 
 ## `POST /lessons/:lessonId/localizations/:targetLanguage/generate`
+
+`boxFolderId` is optional: when omitted, falls back to the
+`BOX_AUDIO_FOLDER_ID` env var (400 if neither is set). Only used the first
+time a lesson+language localization is created.
 
 Sync — lesson-level scope, per the settled sync/async split (only
 course-level scope is job-tracked). Thin route; all logic lives in
@@ -266,6 +297,16 @@ now holds audio synthesized from the discarded translation). To regenerate
 audio once satisfied with the new translation, call
 `POST /lessons/:lessonId/localizations/:targetLanguage/generate` with
 `segmentId` + `force: true`.
+
+---
+
+## `GET /clips/:clipId/audio`
+
+Sync — streams one clip's audio bytes from Box through the API
+(`clips.route.ts`, `IFileStorageService.getFileContent`), so browsers never
+need Box credentials or shared links. `Content-Type` from the clip's
+`audio_format` (`mp3_*` → `audio/mpeg`). 404 if the clip doesn't exist or
+has no Box file; 502 if Box fails.
 
 ---
 

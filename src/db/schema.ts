@@ -20,6 +20,9 @@ import { sql } from "drizzle-orm";
 export const courses = pgTable("courses", {
   id: text("id").primaryKey(),
   courseName: text("course_name").notNull(),
+  // 'Released' | 'Draft'. Nullable: owned by the BI app / LCMS, set via
+  // POST /courses/import until a catalog sync exists.
+  status: text("status"),
   lcmsCourseId: text("lcms_course_id").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
