@@ -116,13 +116,19 @@ called by the course-level fan-out above.
 
 ---
 
-## Retranslation: a standalone action outside the generate loop
+## Translation: lesson-level and segment-level, outside the generate loop
+
+`POST /lessons/:lessonId/translations/:targetLanguage` re-translates every
+segment (or a selected subset), overwriting existing rows, with the whole
+lesson script sent to DeepL as context. Text only — `audioStale` in the
+response says which clips now need regenerating. The single-segment
+version is below.
 
 `POST /segments/:segmentId/translations/:targetLanguage/retranslate`
 (`retranslateSegment`, `src/services/translation/retranslateSegment.ts`) is
 not part of the generate-stage loop above — it's a segment-level escape
 hatch for when a translation is suspect and needs another DeepL pass.
-Deletes the segment's `segment_translations` row and calls DeepL again via
+Overwrites the segment's `segment_translations` row by calling DeepL again via
 `translateAndStoreSegment` (the same DeepL-call-plus-insert helper the
 generate loop uses for a never-yet-translated segment), but never touches
 `tts_clips`. Audio regeneration from the corrected translation is a

@@ -3,6 +3,7 @@ import type { Database } from "../../db/client.js";
 import { segmentTranslations } from "../../db/schema.js";
 import type { ITranslationService } from "../../interfaces/ITranslationService.js";
 import { getGlossaryId } from "./getGlossaryId.js";
+import type { TranslationContext } from "./buildLessonContext.js";
 
 export interface TranslateAndStoreDeps {
   db: Database;
@@ -14,16 +15,17 @@ export interface TranslateAndStoreResult {
 }
 
 /**
- * Calls DeepL (with this target language's glossary, if any) and inserts a
- * fresh segment_translations row. Always inserts — whether an existing row
- * should be reused instead (generate-stage resume) or replaced first
- * (retranslateSegment) is the caller's decision, not this function's.
+ * Calls DeepL (with this target language's glossary, if any, and the lesson
+ * context) and writes the segment_translations row — overwriting any
+ * existing row for this segment+language. Whether an existing row should be
+ * reused instead (generate-stage resume) is the caller's decision.
  */
 export async function translateAndStoreSegment(
   deps: TranslateAndStoreDeps,
   segmentId: string,
   englishText: string,
-  targetLanguage: string
+  targetLanguage: string,
+  context?: TranslationContext
 ): Promise<TranslateAndStoreResult> {
   const { db } = deps;
 
@@ -33,16 +35,25 @@ export async function translateAndStoreSegment(
     text: englishText,
     targetLanguage,
     glossaryId,
+    context: context?.text,
   });
 
-  await db.insert(segmentTranslations).values({
-    segmentId,
-    targetLanguage,
+  const values = {
     translatedText: result.translatedText,
     deeplGlossaryId: glossaryId ?? null,
-    contextUsed: null,
+    contextUsed: context?.descriptor ?? null,
     billedCharacters: null,
-  });
+    // No updated_at column: created_at records when THIS translation was produced.
+    createdAt: new Date(),
+  };
+
+  await db
+    .insert(segmentTranslations)
+    .values({ segmentId, targetLanguage, ...values })
+    .onConflictDoUpdate({
+      target: [segmentTranslations.segmentId, segmentTranslations.targetLanguage],
+      set: values,
+    });
 
   return { translatedText: result.translatedText };
 }

@@ -143,6 +143,26 @@ part of resolving a lesson's segments. `502 UpstreamError` on DeepL failure.
 
 ---
 
+## `POST /lessons/:lessonId/translations/:targetLanguage`
+
+Sync — lesson-level "translate this lesson". `translateLessonSegments`
+(`src/services/translation/translateLessonSegments.ts`) pushes every segment
+(or only `segmentIds`, body optional) through DeepL again, overwriting
+existing `segment_translations` rows. Each call sends the whole English
+script as DeepL `context` (`buildLessonContext`), so terminology stays
+consistent while each translation still maps 1:1 to its segment.
+
+- Text only — never touches `tts_clips`. `audioStale` lists segments whose
+  active clip was spoken from different text than the new translation;
+  regenerate those via the generate endpoint (`segmentId` + `force`).
+- Per-segment, non-transactional: failures land in `errors[]`, the rest
+  continue. Returns `{ lessonId, targetLanguage, totalSegments, translated,
+  errors, audioStale }`.
+- `400` if the lesson doesn't exist, has no segments, `segmentIds` aren't
+  in it, or `targetLanguage` is `en`.
+
+---
+
 ## `POST /lessons/:lessonId/localizations/:targetLanguage/generate`
 
 Sync — lesson-level scope, per the settled sync/async split (only
@@ -227,10 +247,10 @@ the same vacuous-truth reason.
 
 Sync — segment-level scope. Thin route; all logic lives in
 `retranslateSegment` (`src/services/translation/retranslateSegment.ts`).
-Deletes the existing `segment_translations` row for this segment+language
-(hard delete — no status/audit column on that table today, see
-`docs/decisions.md`) and re-translates via DeepL, using
-`translateAndStoreSegment` — the same DeepL-call-plus-insert helper
+Re-translates via DeepL with the full lesson script as context and
+overwrites the existing `segment_translations` row in place (no
+status/audit history on that table, see `docs/decisions.md`), using
+`translateAndStoreSegment` — the same DeepL-call-plus-upsert helper
 `generateLocalizationForLesson` uses, extracted so the two don't duplicate
 that logic. 500 `InternalError` if the segment doesn't exist, if
 `targetLanguage` is `"en"` (nothing to retranslate — `lesson_segments.text`

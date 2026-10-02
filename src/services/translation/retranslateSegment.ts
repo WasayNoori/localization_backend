@@ -1,9 +1,10 @@
 // src/services/translation/retranslateSegment.ts
 import { and, eq, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { lessonSegments, segmentTranslations, ttsClips } from "../../db/schema.js";
+import { lessonSegments, ttsClips } from "../../db/schema.js";
 import type { ITranslationService } from "../../interfaces/ITranslationService.js";
 import { translateAndStoreSegment } from "./translateAndStoreSegment.js";
+import { loadLessonContext } from "./buildLessonContext.js";
 
 export interface RetranslateSegmentDeps {
   db: Database;
@@ -23,8 +24,8 @@ export interface RetranslateSegmentResult {
 }
 
 /**
- * Discards the existing segment_translations row for one segment+language
- * and re-translates via DeepL. Deliberately decoupled from audio generation
+ * Re-translates one segment+language via DeepL (with full-lesson context),
+ * overwriting its segment_translations row. Deliberately decoupled from audio generation
  * — translation QC is an iterative, segment-at-a-time process, and
  * re-running ElevenLabs on every retry would be needlessly expensive. See
  * docs/decisions.md.
@@ -44,13 +45,18 @@ export async function retranslateSegment(
     throw new Error(`"en" has no translation to regenerate — lesson_segments.text is the source text`);
   }
 
-  // Hard delete, not a soft supersede — segment_translations has no
-  // status/audit column today (see docs/decisions.md open questions).
-  await db
-    .delete(segmentTranslations)
-    .where(and(eq(segmentTranslations.segmentId, segmentId), eq(segmentTranslations.targetLanguage, targetLanguage)));
+  // translateAndStoreSegment overwrites the existing row in place (no
+  // status/audit history on segment_translations — see docs/decisions.md).
+  const { segments, context } = await loadLessonContext(db, segment.lessonId);
+  const index = segments.findIndex((s) => s.id === segmentId);
 
-  const { translatedText } = await translateAndStoreSegment(deps, segmentId, segment.text, targetLanguage);
+  const { translatedText } = await translateAndStoreSegment(
+    deps,
+    segmentId,
+    segment.text,
+    targetLanguage,
+    context.forIndex(index)
+  );
 
   const [activeClip] = await db
     .select({ id: ttsClips.id })

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { lessons } from "../db/schema.js";
 import { generateLocalizationForLesson } from "../services/generation/generateLocalizationForLesson.js";
 import { parseLessonSegments } from "../services/parsing/parseLessonSegments.js";
+import { translateLessonSegments, TranslateLessonError } from "../services/translation/translateLessonSegments.js";
 
 export async function lessonsRoute(app: FastifyInstance) {
   // Plain CRUD against `lessons` — no service/interface layer, same pattern
@@ -87,6 +88,59 @@ export async function lessonsRoute(app: FastifyInstance) {
         return reply.send(result);
       } catch (err) {
         request.log.error(err, "Lesson parse failed");
+        return reply.code(500).send({
+          error: "InternalError",
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
+      }
+    }
+  );
+
+  app.post(
+    "/lessons/:lessonId/translations/:targetLanguage",
+    {
+      schema: {
+        description:
+          "Translates every segment of the lesson (or only segmentIds) via DeepL with the full lesson script " +
+          "as context, overwriting existing translations. Text only — never touches audio; audioStale lists " +
+          "segments whose current audio no longer matches the new text (regenerate via the generate endpoint " +
+          "with segmentId + force). Sync, per-segment: failures land in errors[]. 400 if the lesson doesn't " +
+          "exist, has no segments, segmentIds aren't in it, or targetLanguage is 'en'.",
+        security: [{ apiKey: [] }],
+        params: {
+          type: "object",
+          required: ["lessonId", "targetLanguage"],
+          properties: {
+            lessonId: { type: "string" },
+            targetLanguage: { type: "string" },
+          },
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            segmentIds: { type: "array", items: { type: "string" }, minItems: 1 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { lessonId, targetLanguage } = request.params as { lessonId: string; targetLanguage: string };
+      const { segmentIds } = (request.body ?? {}) as { segmentIds?: string[] };
+
+      try {
+        const result = await translateLessonSegments(
+          { db: app.db, translationService: app.translationService },
+          lessonId,
+          targetLanguage,
+          { segmentIds }
+        );
+        return reply.send(result);
+      } catch (err) {
+        if (err instanceof TranslateLessonError) {
+          return reply.code(400).send({ error: "BadRequest", message: err.message });
+        }
+        request.log.error(err, "Lesson translation failed");
         return reply.code(500).send({
           error: "InternalError",
           message: err instanceof Error ? err.message : "Unknown error",

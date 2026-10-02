@@ -22,6 +22,10 @@ Also touch: src/routes/courses.route.ts (request schema), src/db/schema.ts
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 
+## To change what DeepL receives as context
+Start in: src/services/translation/buildLessonContext.ts (size cap, window)
+Also touch: translateAndStoreSegment.ts (what's stored in context_used)
+
 ## To change how sentences are split
 Start in: spacy-nlp-service/nlp/rules.py
 

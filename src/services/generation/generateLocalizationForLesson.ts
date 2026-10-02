@@ -16,6 +16,7 @@ import type { IFileStorageService } from "../../interfaces/IFileStorageService.j
 import type { IVoiceSettingsProvider } from "../../interfaces/IvoiceSettingsProvider.js";
 import { findMissingSegments } from "./findMissingSegments.js";
 import { translateAndStoreSegment } from "../translation/translateAndStoreSegment.js";
+import { buildLessonContext, type TranslationContext } from "../translation/buildLessonContext.js";
 
 const AUDIO_FORMAT = "mp3_44100_192";
 // Fixed rather than random: ElevenLabs seed reuse is best-effort only, but a
@@ -126,6 +127,7 @@ export async function generateLocalizationForLesson(
   // For previous/next-segment stitching context — index into the full,
   // sequence-ordered segment list, not just the missing subset.
   const segmentIndexById = new Map(segments.map((s, index) => [s.id, index]));
+  const lessonContext = buildLessonContext(segments);
 
   const voiceDefaults = await deps.voiceSettingsProvider.getSettings();
   const voiceSettingsRow = await getOrCreateLanguageVoiceSettings(deps, targetLanguage, voiceDefaults);
@@ -139,7 +141,13 @@ export async function generateLocalizationForLesson(
       const text =
         targetLanguage === "en"
           ? segment.text
-          : await resolveTranslatedText(deps, segment.id, segment.text, targetLanguage);
+          : await resolveTranslatedText(
+              deps,
+              segment.id,
+              segment.text,
+              targetLanguage,
+              lessonContext.forIndex(segmentIndexById.get(segment.id)!)
+            );
 
       const voiceId = voiceSettingsRow.voiceId;
       const modelId = voiceSettingsRow.modelId;
@@ -211,7 +219,8 @@ async function resolveTranslatedText(
   deps: GenerateLocalizationDeps,
   segmentId: string,
   englishText: string,
-  targetLanguage: string
+  targetLanguage: string,
+  context: TranslationContext
 ): Promise<string> {
   const { db } = deps;
 
@@ -225,7 +234,7 @@ async function resolveTranslatedText(
     return existing.translatedText;
   }
 
-  const { translatedText } = await translateAndStoreSegment(deps, segmentId, englishText, targetLanguage);
+  const { translatedText } = await translateAndStoreSegment(deps, segmentId, englishText, targetLanguage, context);
   return translatedText;
 }
 

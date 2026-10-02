@@ -22,6 +22,7 @@ export class DeepLTranslationService implements ITranslationService {
       },
       body: JSON.stringify({
         text: [request.text],
+        source_lang: (request.sourceLanguage ?? "en").toUpperCase(),
         target_lang: request.targetLanguage,
         glossary_id: request.glossaryId,
         context: request.context,

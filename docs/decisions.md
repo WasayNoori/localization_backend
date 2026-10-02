@@ -301,6 +301,26 @@ stays an explicit call, guided by the `needsReparse` list in the response.
 When the BI app / LCMS becomes the source, a catalog client can build this
 same payload.
 
+## Lesson translation re-translates every segment, with full-lesson DeepL context
+"Request translation" on a lesson means push all of its segments (or a
+selected subset) through DeepL again and overwrite the stored translations —
+`POST /lessons/:lessonId/translations/:targetLanguage`. Unlike generate, it
+never reuses existing rows, and it never touches audio (same decoupling as
+retranslation). Every DeepL call, from this endpoint, retranslate and the
+generate loop, now sends the whole lesson script as `context` (unbilled,
+untranslated), so terms and tone stay consistent across segments while each
+translation stays aligned to its segment for TTS. Scripts over 50,000
+characters fall back to a ±4-segment window to stay under DeepL's 128 KiB
+request cap. `context_used` stores a short descriptor plus hash, not the
+full text. `source_lang` is now always sent (default `EN`) instead of
+letting DeepL guess from short segments.
+
+## `segment_translations` is overwritten in place, not deleted and re-inserted
+`translateAndStoreSegment` upserts on `(segment_id, target_language)`, so
+retranslation no longer hard-deletes first. Stale audio is detected by
+comparing the active clip's `sentence_text` to the current
+`translated_text` — no new column needed.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?
