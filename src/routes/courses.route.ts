@@ -10,6 +10,12 @@ import {
 } from "../services/catalog/importCourseStructure.js";
 import { getCourseStructure } from "../services/catalog/getCourseStructure.js";
 import { listCourses } from "../services/catalog/listCourses.js";
+import { updateCourseScripts, CourseScriptsError, type CourseScriptInput } from "../services/catalog/updateCourseScripts.js";
+
+const dryRunQuerystring = {
+  type: "object",
+  properties: { dryRun: { type: "boolean" } },
+} as const;
 
 const lessonImportSchema = {
   type: "object",
@@ -49,8 +55,11 @@ export async function coursesRoute(app: FastifyInstance) {
           "desired structure — sections/memberships missing from it are removed from this course (lessons " +
           "themselves are never deleted). Never parses: a changed script bumps script_updated_at and is " +
           "reported in needsReparse if the lesson was already parsed. 400 on duplicate section indexes or " +
-          "lesson ids.",
+          "lesson ids. ?dryRun=true runs the same writes and rolls them back — a preview that returns the same " +
+          "result shape (sectionsAdded/Removed, lessonsCreated/Updated/Unchanged/RemovedFromCourse, …) with " +
+          "dryRun: true and nothing saved.",
         security: [{ apiKey: [] }],
+        querystring: dryRunQuerystring,
         body: {
           type: "object",
           required: ["id", "courseName", "sections"],
@@ -66,11 +75,70 @@ export async function coursesRoute(app: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const result = await importCourseStructure(app.db, request.body as ImportCourseInput);
+        const { dryRun } = request.query as { dryRun?: boolean };
+        const result = await importCourseStructure(app.db, request.body as ImportCourseInput, { dryRun });
         return reply.send(result);
       } catch (err) {
         if (err instanceof CourseImportValidationError) {
           return reply.code(400).send({ error: "BadRequest", message: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  // Different action from import (scripts arrive separately, often later),
+  // and a partial payload must not touch structure — hence its own endpoint.
+  app.put(
+    "/courses/:courseId/scripts",
+    {
+      bodyLimit: 20 * 1024 * 1024,
+      schema: {
+        description:
+          "Scripts-only upload for lessons already in the course: sets lessons.script_text (bumping " +
+          "script_updated_at when the text actually changes). Structure and membership are untouched, so a " +
+          "partial list is safe. All-or-nothing: 400 if any lessonId is duplicated or isn't in this course, 404 " +
+          "if the course doesn't exist. Never parses — needsReparse lists changed scripts on parsed lessons. " +
+          "?dryRun=true previews without saving.",
+        security: [{ apiKey: [] }],
+        querystring: dryRunQuerystring,
+        params: {
+          type: "object",
+          required: ["courseId"],
+          properties: { courseId: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["scripts"],
+          additionalProperties: false,
+          properties: {
+            scripts: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["lessonId", "scriptText"],
+                additionalProperties: false,
+                properties: {
+                  lessonId: { type: "string", minLength: 1 },
+                  scriptText: { type: "string", minLength: 1 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { courseId } = request.params as { courseId: string };
+      const { dryRun } = request.query as { dryRun?: boolean };
+      const { scripts } = request.body as { scripts: CourseScriptInput[] };
+      try {
+        return reply.send(await updateCourseScripts(app.db, courseId, scripts, { dryRun }));
+      } catch (err) {
+        if (err instanceof CourseScriptsError) {
+          return reply
+            .code(err.statusCode)
+            .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
         throw err;
       }

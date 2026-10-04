@@ -63,6 +63,26 @@ display order (array position becomes `course_lessons.position`).
   explicit choice, since re-parse wipes translations and audio.
 - `400` on duplicate `sectionIndex` or a lesson id repeated within the
   course. Body limit raised to 20 MB for full-course scripts.
+- `?dryRun=true` runs the same transaction and rolls it back — a preview
+  that can't disagree with the real import. The result (both modes) also
+  carries `dryRun`, `courseCreated`, `sectionsAdded`, `sectionsRemoved`,
+  `lessonsUnchanged` and `lessonsRemovedFromCourse`; `lessonsUpdated` now
+  lists only lessons whose name, description or script actually changed.
+
+---
+
+## `PUT /courses/:courseId/scripts`
+
+Sync — scripts-only upload, `updateCourseScripts`
+(`src/services/catalog/updateCourseScripts.ts`). Body:
+`{ scripts: [{ lessonId, scriptText }] }`. Sets `lessons.script_text` for
+lessons already in the course, bumping `script_updated_at` only when the
+text actually changes. Structure and membership are untouched, so a partial
+list is safe — unlike `POST /courses/import`, whose payload is the full
+structure. All-or-nothing: `400` if a `lessonId` is duplicated or isn't in
+this course, `404` if the course doesn't exist. Never parses. Returns
+`{ courseId, dryRun, scriptsChanged, unchanged, needsReparse }`;
+`?dryRun=true` previews without saving.
 
 ---
 

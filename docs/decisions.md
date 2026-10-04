@@ -368,6 +368,27 @@ databases built from this branch's 0002) so the DB matches the schema and
 future drizzle-kit diffs don't trip over it. Same constraint either way —
 naming only.
 
+## Import preview via dry-run; scripts get their own endpoint
+Import is a two-step user flow (preview, then confirm), so
+`POST /courses/import` and `PUT /courses/:courseId/scripts` take
+`?dryRun=true`: the real transaction runs and is rolled back, so the
+preview is exactly what a real import would do — no second "diff" code
+path to drift. Scripts are often supplied after the structure, and the
+import payload is authoritative for membership (a partial course JSON
+would remove lessons from the course), so scripts-only uploads are a
+separate endpoint that never touches structure.
+
+## Interim exception: the UI parses a course's lessons one at a time
+Settled rule: course-scope work runs as a `processing_jobs` job. Exception
+until the course-level job runner exists: after an import, the frontend
+parses the lessons that have a script but no segments by calling
+`POST /lessons/:lessonId/parse` sequentially, showing progress and
+per-lesson failures. Acceptable because parse is fast (spaCy + one
+transaction) and only ever applied to never-parsed lessons (no data loss).
+Re-parsing already-parsed lessons stays an explicit, per-lesson,
+confirmed action. Replace with `POST /courses/:courseId/parse` (job) once
+the runner is built.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?
