@@ -1,5 +1,5 @@
 // src/routes/lessons.route.ts
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { eq } from "drizzle-orm";
 import { lessons } from "../db/schema.js";
 import { generateLocalizationForLesson } from "../services/generation/generateLocalizationForLesson.js";
@@ -7,6 +7,13 @@ import { parseLessonSegments } from "../services/parsing/parseLessonSegments.js"
 import { translateLessonSegments, TranslateLessonError } from "../services/translation/translateLessonSegments.js";
 import { getLessonLocalization } from "../services/catalog/getLessonLocalization.js";
 import { env } from "../config/env.js";
+
+// Body is optional on some POSTs, but Fastify validates a missing body
+// against `type: "object"` and rejects it (400 "body must be object") before
+// the handler runs — e.g. a frontend fetch POST with no body. Default it to {}.
+async function defaultEmptyBody(request: FastifyRequest) {
+  request.body ??= {};
+}
 
 export async function lessonsRoute(app: FastifyInstance) {
   // Plain CRUD against `lessons` — no service/interface layer, same pattern
@@ -128,6 +135,7 @@ export async function lessonsRoute(app: FastifyInstance) {
   app.post(
     "/lessons/:lessonId/translations/:targetLanguage",
     {
+      preValidation: defaultEmptyBody,
       schema: {
         description:
           "Translates every segment of the lesson (or only segmentIds) via DeepL with the full lesson script " +
@@ -181,6 +189,7 @@ export async function lessonsRoute(app: FastifyInstance) {
   app.post(
     "/lessons/:lessonId/localizations/:targetLanguage/generate",
     {
+      preValidation: defaultEmptyBody,
       schema: {
         description:
           "Resumable 'find what's missing' generate loop for one lesson + target language: translates " +

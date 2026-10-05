@@ -40,10 +40,15 @@ frontend never talks to it directly, and it never talks to Postgres, Box,
 DeepL, or ElevenLabs directly.
 
 **PostgreSQL (Azure)** is the single source of truth for all pipeline
-state. Accessed only from the main API, via Drizzle ORM.
+state, including course structure (courses → sections → lessons) and each
+lesson's English script text (`lessons.script_text`). Accessed only from
+the main API, via Drizzle ORM.
 
-**Box** is external file storage. Source scripts and generated audio clips
-live here; the database stores Box file IDs, never file contents.
+**Box** is external file storage. Generated audio clips live here; the
+database stores their Box file IDs, not the audio. Source scripts now live
+in the DB (imported via `POST /courses/import`); `lessons.box_file_id` is
+kept as the future pointer to the script in Box once the Box folder
+structure is decided, and is only a parse fallback today.
 
 **Azure Key Vault** backs `ISecretsProvider` in production; no secrets ever
 live in `process.env` or `envSchema`.
@@ -79,7 +84,8 @@ middleware/filter.
 **ElevenLabs** generates text-to-speech audio from either English or
 translated segment text.
 
-**Box** stores source scripts (read) and generated audio (write).
+**Box** stores generated audio (write). Source scripts are read from Box
+only as a fallback for lessons with no `script_text` in the DB.
 
 **Azure Key Vault** handles secrets management, abstracted behind
 `ISecretsProvider` so the rest of the codebase never knows whether it's
@@ -91,12 +97,15 @@ talking to Key Vault or a local dummy provider.
 
 Today, `courses` and `lessons` are real, interim tables owned by this
 pipeline (full schema in `rationale/schema-guide.md`) — not placeholders.
-They're load-bearing and populated manually/internally.
+They're load-bearing and populated manually/internally — in bulk via
+`POST /courses/import`, which writes a whole course in one call: the
+course, its sections (`course_sections`), lesson placement
+(`course_lessons.section_id`/`position`) and each lesson's script text.
 
 Once the separate LCMS system ships, these tables become local
 shadow/reference tables: `id` values will originate from LCMS (synced or
-looked up), but the tables themselves remain. `box_file_id` and
-`parsed_at` stay pipeline-owned regardless of LCMS, since they're facts
+looked up), but the tables themselves remain. `box_file_id`,
+`script_updated_at` and `parsed_at` stay pipeline-owned regardless of LCMS, since they're facts
 about this pipeline's processing of a lesson, not about the course catalog
 itself.
 
@@ -123,8 +132,8 @@ Main API (TS/Fastify)
    ├──► spaCy microservice (Python/FastAPI) — sentence segmentation
    ├──► DeepL — translation
    ├──► ElevenLabs — text-to-speech
-   ├──► PostgreSQL (Azure) — all pipeline state
-   └──► Box — source scripts (read), audio clips (write)
+   ├──► PostgreSQL (Azure) — all pipeline state, course structure, script text
+   └──► Box — audio clips (write); source scripts (read, fallback only)
 
 Secrets: Main API ──► Azure Key Vault (via ISecretsProvider)
 ```

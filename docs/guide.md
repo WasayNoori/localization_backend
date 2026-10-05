@@ -24,3 +24,8 @@ This is where concrete classes get instantiated and wired together, then attache
 
 2. plugins/auth.ts — cross-cutting middleware
 Fastify's plugin system is also how you register hooks that run on every (or every matching) request — auth, request logging, CORS, rate limiting. auth.ts registers an onRequest hook that checks the API key header before any route handler runs. Same idea as an ASP.NET Core middleware/filter in the pipeline.
+
+# Route hooks (`preValidation`) and optional bodies
+In C# lingo, a per-route hook like `preValidation` is an action filter's `OnActionExecuting` that runs *before* model binding/validation. Fastify validates `request.body` against the route's JSON schema before the handler runs — and a POST with no body at all fails `type: "object"` with 400 "body must be object", even when every property is optional. `lessons.route.ts` uses `preValidation: defaultEmptyBody` (sets `request.body ??= {}`) on POSTs whose body is optional (lesson translations, generate). Reuse it for any new POST whose body may be omitted entirely.
+
+Related gotcha: Fastify's default Ajv strips unknown properties instead of rejecting them, even with `additionalProperties: false` — a misspelled field is silently dropped, not a 400.

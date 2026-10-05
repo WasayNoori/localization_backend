@@ -349,6 +349,25 @@ silently discarding the rest of the lesson's audio. `force` and
 `segmentId` is given, else the whole lesson). Found while wiring the
 frontend's per-segment "Regenerate audio".
 
+## Optional POST bodies default to `{}` before validation
+Bug fix: lesson translations and generate both document their body as
+optional, but Fastify validated a missing body against `type: "object"`
+and returned 400 before the handler's `request.body ?? {}` ran — so a
+frontend POST with no body failed. Fixed with a `preValidation` hook
+(`defaultEmptyBody` in `lessons.route.ts`) rather than dropping
+`type: "object"` from the schemas, which keeps Swagger accurate and Ajv
+strict mode quiet.
+
+## `course_sections` unique index renamed to match the schema
+The Azure DB was first migrated from a parallel implementation of the
+course-structure change whose index was named
+`course_sections_course_section_idx`; `src/db/schema.ts` names it
+`course_sections_course_index_idx`. Migration
+`0004_rename_course_sections_index` renames it (`IF EXISTS`, so a no-op on
+databases built from this branch's 0002) so the DB matches the schema and
+future drizzle-kit diffs don't trip over it. Same constraint either way —
+naming only.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?
