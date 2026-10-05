@@ -354,7 +354,8 @@ Bug fix: lesson translations and generate both document their body as
 optional, but Fastify validated a missing body against `type: "object"`
 and returned 400 before the handler's `request.body ?? {}` ran — so a
 frontend POST with no body failed. Fixed with a `preValidation` hook
-(`defaultEmptyBody` in `lessons.route.ts`) rather than dropping
+(`defaultEmptyBody`, `src/routes/default-empty-body.ts`; also on the course
+title-translation POST) rather than dropping
 `type: "object"` from the schemas, which keeps Swagger accurate and Ajv
 strict mode quiet.
 

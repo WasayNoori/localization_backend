@@ -91,7 +91,9 @@ export async function translateLessonSegments(
   const titles: TranslateLessonResult["titles"] = { translated: false, error: null };
   if (!wanted) {
     try {
-      await translateLessonTitles(deps, lesson, targetLanguage, segments.map((s) => s.text).join("\n"));
+      // forIndex(0): the whole script, or the opening window when it exceeds
+      // the DeepL request-size cap — same rule as segment translation.
+      await translateLessonTitles(deps, lesson, targetLanguage, context.forIndex(0).text);
       titles.translated = true;
     } catch (err) {
       titles.error = err instanceof Error ? err.message : String(err);

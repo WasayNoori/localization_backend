@@ -10,6 +10,7 @@ import {
 } from "../services/catalog/importCourseStructure.js";
 import { getCourseStructure } from "../services/catalog/getCourseStructure.js";
 import { listCourses } from "../services/catalog/listCourses.js";
+import { defaultEmptyBody } from "./default-empty-body.js";
 import { translateCourseTitles, TranslateTitlesError } from "../services/translation/translateCatalogTitles.js";
 import { updateCourseScripts, CourseScriptsError, type CourseScriptInput } from "../services/catalog/updateCourseScripts.js";
 
@@ -150,6 +151,7 @@ export async function coursesRoute(app: FastifyInstance) {
   app.post(
     "/courses/:courseId/titles/translations/:targetLanguage",
     {
+      preValidation: defaultEmptyBody,
       schema: {
         description:
           "Translates the course name, every section title and every lesson's name + description into one " +

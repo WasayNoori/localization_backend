@@ -1,5 +1,5 @@
 // src/routes/lessons.route.ts
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import { lessons } from "../db/schema.js";
 import { generateLocalizationForLesson } from "../services/generation/generateLocalizationForLesson.js";
@@ -7,13 +7,7 @@ import { parseLessonSegments } from "../services/parsing/parseLessonSegments.js"
 import { translateLessonSegments, TranslateLessonError } from "../services/translation/translateLessonSegments.js";
 import { getLessonLocalization } from "../services/catalog/getLessonLocalization.js";
 import { env } from "../config/env.js";
-
-// Body is optional on some POSTs, but Fastify validates a missing body
-// against `type: "object"` and rejects it (400 "body must be object") before
-// the handler runs — e.g. a frontend fetch POST with no body. Default it to {}.
-async function defaultEmptyBody(request: FastifyRequest) {
-  request.body ??= {};
-}
+import { defaultEmptyBody } from "./default-empty-body.js";
 
 export async function lessonsRoute(app: FastifyInstance) {
   // Plain CRUD against `lessons` — no service/interface layer, same pattern
