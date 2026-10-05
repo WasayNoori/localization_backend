@@ -47,7 +47,7 @@ Sync — loads or refreshes a whole course structure in one transaction.
 Logic in `importCourseStructure` (`src/services/catalog/
 importCourseStructure.ts`), DB only. Body:
 `{ id, courseName, status?, sections: [{ sectionIndex, title, lessons: [{ id,
-lessonName, description?, scriptText? }] }] }` — sections and lessons in
+lessonName, description?, scriptText?, tags? }] }] }` — sections and lessons in
 display order (array position becomes `course_lessons.position`).
 
 - Idempotent upsert: course by `id`, sections by `(course_id,
@@ -86,6 +86,22 @@ this course, `404` if the course doesn't exist. Never parses. Returns
 
 ---
 
+## `POST /courses/:courseId/titles/translations/:targetLanguage`
+
+Sync — `translateCourseTitles` (`src/services/translation/
+translateCatalogTitles.ts`). Translates the course name, every section
+title and every lesson's name + description into one language, via
+`ITranslationService.translateMany` (DeepL, ≤50 texts per request, the
+course's English titles as `context`, the language's glossary). Only
+missing or stale items (English changed since) are sent unless body
+`{ force: true }`. Writes `course_translations`, `section_translations`,
+`lesson_translations`. Returns `{ courseId, targetLanguage, translated:
+{course, sections, lessons}, skipped: {…} }`. `400` for `en`, `404` if the
+course doesn't exist, `502` if DeepL fails (nothing written). Sync on
+purpose — a few DeepL requests, not a per-lesson fan-out.
+
+---
+
 ## `GET /courses`
 
 Sync, read-only — `listCourses` (`src/services/catalog/listCourses.ts`).
@@ -102,7 +118,11 @@ course size. Languages with no work yet are absent; treat as zero.
 Sync, read-only — `getCourseStructure` (`src/services/catalog/
 getCourseStructure.ts`). Returns ordered sections → ordered lessons, each
 with `hasScript`, `boxFileId`, `parsedAt`, `segmentCount`, `parseStale`
-(script changed since last parse), and `localization[]` per language. The
+(script changed since last parse), `localization[]` per language, `tags`,
+and `translations[]` (`language`, `lessonName`, `description`, `stale`).
+Sections carry `translations[]` (`language`, `title`, `stale`) and the
+course carries `translations[]` (`language`, `courseName`, `stale`) —
+`stale` means the English changed after it was translated. The
 course itself also carries `status`, `segmentCount` and `coverage[]` (same
 shape as `GET /courses`). Lessons in the course with no section
 appear in `unsectionedLessons`. 404 if `courseId` doesn't exist.
@@ -180,7 +200,8 @@ part of resolving a lesson's segments. `502 UpstreamError` on DeepL failure.
 
 Sync, read-only — `getLessonLocalization` (`src/services/catalog/
 getLessonLocalization.ts`). The lesson (`lessonName`, `description`,
-`hasScript`, `parsedAt`, `parseStale`) and its segments in order, each with
+`hasScript`, `parsedAt`, `parseStale`, `tags`, and `translation` — its
+name/description in this language with `stale`, or null) and its segments in order, each with
 `sourceText`, `translation` (`text`, `translatedAt`, `contextUsed`, or null),
 the current non-superseded `clip` (`id`, `qcStatus`, `qcIssues`, …, or
 null), a derived `status` (`not_translated` | `translated` | `audio_ready` |
@@ -199,6 +220,9 @@ existing `segment_translations` rows. Each call sends the whole English
 script as DeepL `context` (`buildLessonContext`), so terminology stays
 consistent while each translation still maps 1:1 to its segment.
 
+- A whole-lesson call (no `segmentIds`) also translates the lesson's name
+  and description (`titles: { translated, error }` in the response); a
+  `segmentIds` call doesn't.
 - Text only — never touches `tts_clips`. `audioStale` lists segments whose
   active clip was spoken from different text than the new translation;
   regenerate those via the generate endpoint (`segmentId` + `force`).

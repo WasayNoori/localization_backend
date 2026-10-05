@@ -9,6 +9,8 @@ export interface ImportLessonInput {
   description?: string;
   /** Full English script. Omit to leave an existing script untouched. */
   scriptText?: string;
+  /** Catalog tags. Omit to leave existing tags untouched. */
+  tags?: string[];
 }
 
 export interface ImportSectionInput {
@@ -158,6 +160,7 @@ export async function importCourseStructure(
             description: lesson.description ?? null,
             scriptText: lesson.scriptText ?? null,
             scriptUpdatedAt: lesson.scriptText !== undefined ? now : null,
+            tags: lesson.tags ?? [],
           });
           result.lessonsCreated.push(lesson.id);
         } else {
@@ -166,6 +169,7 @@ export async function importCourseStructure(
             .set({
               lessonName: lesson.lessonName,
               description: lesson.description ?? existing.description,
+              ...(lesson.tags !== undefined ? { tags: lesson.tags } : {}),
               ...(scriptChanged ? { scriptText: lesson.scriptText, scriptUpdatedAt: now } : {}),
               updatedAt: now,
             })
@@ -173,7 +177,8 @@ export async function importCourseStructure(
           const changed =
             scriptChanged ||
             existing.lessonName !== lesson.lessonName ||
-            (lesson.description !== undefined && lesson.description !== existing.description);
+            (lesson.description !== undefined && lesson.description !== existing.description) ||
+            (lesson.tags !== undefined && lesson.tags.join("\u0000") !== existing.tags.join("\u0000"));
           (changed ? result.lessonsUpdated : result.lessonsUnchanged).push(lesson.id);
           if (scriptChanged && existing.parsedAt) {
             result.needsReparse.push(lesson.id);

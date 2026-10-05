@@ -1,7 +1,8 @@
 // src/services/catalog/getLessonLocalization.ts
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { lessons, lessonSegments, segmentTranslations, ttsClips } from "../../db/schema.js";
+import { lessons, lessonSegments, lessonTranslations, segmentTranslations, ttsClips } from "../../db/schema.js";
+import { lessonTitlesStale } from "../translation/translateCatalogTitles.js";
 
 export type SegmentLocalizationStatus = "not_translated" | "translated" | "audio_ready" | "qc_failed";
 
@@ -26,6 +27,9 @@ export interface LessonLocalization {
     hasScript: boolean;
     parsedAt: Date | null;
     parseStale: boolean;
+    tags: string[];
+    /** The lesson's name/description in this language; null if not translated (always null for "en"). */
+    translation: { lessonName: string; description: string | null; stale: boolean } | null;
   };
   language: string;
   segments: SegmentLocalization[];
@@ -50,6 +54,11 @@ export async function getLessonLocalization(
     .where(eq(lessonSegments.lessonId, lessonId))
     .orderBy(asc(lessonSegments.sequenceIndex));
   const segmentIds = segments.map((s) => s.id);
+  const [titleRow] = await db
+    .select()
+    .from(lessonTranslations)
+    .where(and(eq(lessonTranslations.lessonId, lessonId), eq(lessonTranslations.targetLanguage, language)))
+    .limit(1);
 
   const [translations, clips] = segmentIds.length
     ? await Promise.all([
@@ -79,6 +88,10 @@ export async function getLessonLocalization(
       hasScript: lesson.scriptText !== null || lesson.boxFileId !== null,
       parsedAt: lesson.parsedAt,
       parseStale: !!(lesson.parsedAt && lesson.scriptUpdatedAt && lesson.scriptUpdatedAt > lesson.parsedAt),
+      tags: lesson.tags,
+      translation: titleRow
+        ? { lessonName: titleRow.lessonName, description: titleRow.description, stale: lessonTitlesStale(titleRow, lesson) }
+        : null,
     },
     language,
     segments: segments.map((s) => {

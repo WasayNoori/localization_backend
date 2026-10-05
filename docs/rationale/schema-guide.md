@@ -118,6 +118,7 @@ is an independent block, not owned by a single course — see
 | `description`   | text, null        | Short learner-facing summary shown under the lesson title on the platform |
 | `script_text`   | text, null        | Full English script. Source of truth for parsing while the Box structure is undecided. Null until imported |
 | `script_updated_at` | timestamptz, null | Bumped only when `script_text` actually changes. `script_updated_at > parsed_at` means segments were cut from an older script (reported as `parseStale`) |
+| `tags`          | text[], default `{}` | Catalog tags from the course board ("Lesson Level Tags"). Not translated |
 | `box_file_id`   | text, null        | Box file ID of the English source script. Optional future pointer; parsing only falls back to it when `script_text` is null |
 | `lcms_lesson_id`| text, null, unique | Mapping to the LCMS-issued lesson id, populated once LCMS ships. Null until then |
 | `parsed_at`     | timestamptz, null | Set (and overwritten) every time this lesson's script is parsed. Re-parsing always rewrites `lesson_segments` for this lesson |
@@ -185,6 +186,29 @@ join table.
 single correct course to denormalize once a lesson can belong to multiple
 courses; course-based filtering for segments/clips joins through
 `course_lessons` on `lesson_id` instead. See `docs/decisions.md`.
+
+---
+
+## `course_translations`, `section_translations`, `lesson_translations`
+
+Translated catalog text, one row per item per language (composite PK
+`(<item>_id, target_language)`), FK with `on delete cascade` to
+`courses` / `course_sections` / `lessons`.
+
+| Table | Translated columns | Source snapshot |
+|---|---|---|
+| `course_translations` | `course_name` | `source_course_name` |
+| `section_translations` | `title` | `source_title` |
+| `lesson_translations` | `lesson_name`, `description` (null if no English description) | `source_lesson_name`, `source_description` |
+
+All three also carry `deepl_glossary_id` (snapshot), `created_at`,
+`updated_at`. A row is **stale** when its source snapshot differs from the
+current English — same idea as `tts_clips.sentence_text`. Typed tables
+rather than one generic `(entity_type, entity_id, field)` table so every
+row has a real FK and disappears with its item. Section translations key
+on `course_sections.id`, which survives re-import (sections upsert on
+`(course_id, section_index)`); removing a section from a course deletes
+its translations.
 
 ---
 

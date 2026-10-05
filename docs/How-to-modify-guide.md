@@ -23,6 +23,10 @@ Also touch: src/routes/courses.route.ts (request schema), src/db/schema.ts
 Start in: src/services/catalog/getLessonLocalization.ts (per-segment status)
 Also touch: src/services/catalog/getLocalizationCoverage.ts (counts)
 
+## To change how titles/descriptions are translated
+Start in: src/services/translation/translateCatalogTitles.ts
+Also touch: src/interfaces/ITranslationService.ts (`translateMany`)
+
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 

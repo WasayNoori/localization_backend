@@ -49,6 +49,9 @@ export const lessons = pgTable("lessons", {
   // the future pointer once the Box structure is settled; parsing only falls
   // back to it when script_text is null.
   boxFileId: text("box_file_id"),
+  // Search/catalog tags from the course board ("Lesson Level Tags"). Not
+  // translated; stored as given.
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
   lcmsLessonId: text("lcms_lesson_id").unique(),
   // Set (and overwritten) every time this lesson's script is parsed into
   // segments. Re-parsing always rewrites lesson_segments, which cascades
@@ -93,6 +96,69 @@ export const courseLessons = pgTable(
   (table) => ({
     pk: primaryKey({ columns: [table.courseId, table.lessonId] }),
   }),
+);
+
+// Translated catalog text — course name, section titles, lesson names and
+// descriptions — one row per item per language. `source_*` snapshots the
+// English that was translated: when it differs from the current English the
+// translation is stale (same idea as tts_clips.sentence_text vs the current
+// translation). Typed per entity (not one generic table) so each row has a
+// real FK and goes away with its course/section/lesson.
+export const courseTranslations = pgTable(
+  "course_translations",
+  {
+    courseId: text("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    targetLanguage: varchar("target_language", { length: 10 }).notNull(),
+    courseName: text("course_name").notNull(),
+    sourceCourseName: text("source_course_name").notNull(),
+    deeplGlossaryId: text("deepl_glossary_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.courseId, table.targetLanguage] }),
+  })
+);
+
+export const sectionTranslations = pgTable(
+  "section_translations",
+  {
+    sectionId: uuid("section_id")
+      .notNull()
+      .references(() => courseSections.id, { onDelete: "cascade" }),
+    targetLanguage: varchar("target_language", { length: 10 }).notNull(),
+    title: text("title").notNull(),
+    sourceTitle: text("source_title").notNull(),
+    deeplGlossaryId: text("deepl_glossary_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.sectionId, table.targetLanguage] }),
+  })
+);
+
+export const lessonTranslations = pgTable(
+  "lesson_translations",
+  {
+    lessonId: text("lesson_id")
+      .notNull()
+      .references(() => lessons.id, { onDelete: "cascade" }),
+    targetLanguage: varchar("target_language", { length: 10 }).notNull(),
+    lessonName: text("lesson_name").notNull(),
+    // Null when the English lesson has no description.
+    description: text("description"),
+    sourceLessonName: text("source_lesson_name").notNull(),
+    sourceDescription: text("source_description"),
+    deeplGlossaryId: text("deepl_glossary_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.lessonId, table.targetLanguage] }),
+  })
 );
 
 export interface ProcessingJobProgress {

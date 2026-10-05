@@ -389,6 +389,18 @@ Re-parsing already-parsed lessons stays an explicit, per-lesson,
 confirmed action. Replace with `POST /courses/:courseId/parse` (job) once
 the runner is built.
 
+## Catalog text (course/section/lesson titles, descriptions) is translated too
+Course name, section titles, lesson names and descriptions are shown to
+learners, so they're translated per language into typed tables
+(`course_translations`, `section_translations`, `lesson_translations`),
+each with an English snapshot for staleness. Course-wide titles are
+translated by one sync endpoint (`POST /courses/:courseId/titles/
+translations/:lang`) — a few batched DeepL requests rather than a
+per-lesson fan-out, so it doesn't need a job. A whole-lesson translate also
+refreshes that lesson's name/description. `ITranslationService` gained
+`translateMany` (DeepL's multi-text request) for this. Lesson tags are
+stored (`lessons.tags`) but not translated.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

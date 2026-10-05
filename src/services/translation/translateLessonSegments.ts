@@ -5,6 +5,7 @@ import { lessons, segmentTranslations, ttsClips } from "../../db/schema.js";
 import type { ITranslationService } from "../../interfaces/ITranslationService.js";
 import { loadLessonContext } from "./buildLessonContext.js";
 import { translateAndStoreSegment } from "./translateAndStoreSegment.js";
+import { translateLessonTitles } from "./translateCatalogTitles.js";
 
 export interface TranslateLessonDeps {
   db: Database;
@@ -27,12 +28,18 @@ export interface TranslateLessonResult {
    * translation now stored — regenerate with the generate endpoint + force.
    */
   audioStale: string[];
+  /**
+   * The lesson's name + description. Translated on whole-lesson calls only
+   * (not when segmentIds narrows the call); `error` when that request failed.
+   */
+  titles: { translated: boolean; error: string | null };
 }
 
 /**
  * "Translate this lesson": pushes every segment (or the selected ones)
  * through DeepL again with full-lesson context, overwriting existing
- * translations. Text only — never touches tts_clips (same decoupling as
+ * translations. A whole-lesson call also translates the lesson's name and
+ * description. Text only — never touches tts_clips (same decoupling as
  * retranslateSegment). Per-segment and non-transactional: one failure is
  * recorded and the rest continue.
  */
@@ -48,7 +55,7 @@ export async function translateLessonSegments(
     throw new TranslateLessonError(`"en" is the source language — nothing to translate`);
   }
 
-  const [lesson] = await db.select({ id: lessons.id }).from(lessons).where(eq(lessons.id, lessonId)).limit(1);
+  const [lesson] = await db.select().from(lessons).where(eq(lessons.id, lessonId)).limit(1);
   if (!lesson) {
     throw new TranslateLessonError(`No lesson with id "${lessonId}"`);
   }
@@ -81,7 +88,17 @@ export async function translateLessonSegments(
 
   const audioStale = await findStaleAudio(db, translated, targetLanguage);
 
-  return { lessonId, targetLanguage, totalSegments: segments.length, translated, errors, audioStale };
+  const titles: TranslateLessonResult["titles"] = { translated: false, error: null };
+  if (!wanted) {
+    try {
+      await translateLessonTitles(deps, lesson, targetLanguage, segments.map((s) => s.text).join("\n"));
+      titles.translated = true;
+    } catch (err) {
+      titles.error = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  return { lessonId, targetLanguage, totalSegments: segments.length, translated, errors, audioStale, titles };
 }
 
 export class TranslateLessonError extends Error {}

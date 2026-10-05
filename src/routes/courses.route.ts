@@ -10,6 +10,7 @@ import {
 } from "../services/catalog/importCourseStructure.js";
 import { getCourseStructure } from "../services/catalog/getCourseStructure.js";
 import { listCourses } from "../services/catalog/listCourses.js";
+import { translateCourseTitles, TranslateTitlesError } from "../services/translation/translateCatalogTitles.js";
 import { updateCourseScripts, CourseScriptsError, type CourseScriptInput } from "../services/catalog/updateCourseScripts.js";
 
 const dryRunQuerystring = {
@@ -26,6 +27,7 @@ const lessonImportSchema = {
     lessonName: { type: "string", minLength: 1 },
     description: { type: "string" },
     scriptText: { type: "string" },
+    tags: { type: "array", items: { type: "string" } },
   },
 } as const;
 
@@ -141,6 +143,52 @@ export async function coursesRoute(app: FastifyInstance) {
             .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
         throw err;
+      }
+    }
+  );
+
+  app.post(
+    "/courses/:courseId/titles/translations/:targetLanguage",
+    {
+      schema: {
+        description:
+          "Translates the course name, every section title and every lesson's name + description into one " +
+          "language (DeepL, batched ≤50 texts per request, course titles as context, language glossary). Only " +
+          "missing or stale items (English changed since) are sent unless force: true. Sync — a few DeepL " +
+          "requests, not a per-lesson fan-out. 400 for 'en', 404 if the course doesn't exist.",
+        security: [{ apiKey: [] }],
+        params: {
+          type: "object",
+          required: ["courseId", "targetLanguage"],
+          properties: { courseId: { type: "string" }, targetLanguage: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: { force: { type: "boolean" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
+      const { force } = (request.body ?? {}) as { force?: boolean };
+      try {
+        return reply.send(
+          await translateCourseTitles(
+            { db: app.db, translationService: app.translationService },
+            courseId,
+            targetLanguage,
+            { force }
+          )
+        );
+      } catch (err) {
+        if (err instanceof TranslateTitlesError) {
+          return reply
+            .code(err.statusCode)
+            .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
+        }
+        request.log.error(err, "Title translation failed");
+        return reply.code(502).send({ error: "UpstreamError", message: err instanceof Error ? err.message : "Unknown error" });
       }
     }
   );
