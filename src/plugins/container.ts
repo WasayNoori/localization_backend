@@ -20,6 +20,7 @@ import { BasicAudioQcService } from "../services/qc/BasicAudioQcService.js";
 import type { ITranslationReviewer } from "../interfaces/ITranslationReviewer.js";
 import { ClaudeTranslationReviewer } from "../services/review/ClaudeTranslationReviewer.js";
 import { createDbClient, type Database } from "../db/client.js";
+import { KEY_VAULT_SECRET_NAMES } from "../config/key-vault-names.js";
 
 export interface Secrets {
   apiKey: string;
@@ -42,12 +43,13 @@ declare module "fastify" {
   }
 }
 
-function buildSecretsProvider(): ISecretsProvider {
+/** Also used by CLI scripts (src/scripts), which are their own small composition roots. */
+export function buildSecretsProvider(): ISecretsProvider {
   if (env.SECRETS_PROVIDER === "azure-key-vault") {
     if (!env.KEY_VAULT_URL) {
       throw new Error("KEY_VAULT_URL is required when SECRETS_PROVIDER=azure-key-vault");
     }
-    return new AzureKeyVaultSecretsProvider(env.KEY_VAULT_URL);
+    return new AzureKeyVaultSecretsProvider(env.KEY_VAULT_URL, KEY_VAULT_SECRET_NAMES);
   }
   return new DummySecretsProvider();
 }

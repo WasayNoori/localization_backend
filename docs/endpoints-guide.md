@@ -197,6 +197,10 @@ voice settings (ElevenLabs tuning) are independent concerns even though
 both are one-row-per-language, per the endpoint-separation rule (see
 `docs/decisions.md`).
 
+To copy the ids kept in Key Vault (`DeeplGlossary-Spanish/French/Italian`)
+into this table, run `npm run glossaries:sync` (`-- --dry-run` to preview) —
+same upsert, no HTTP call.
+
 ---
 
 ## `POST /translate`

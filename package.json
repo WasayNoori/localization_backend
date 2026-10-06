@@ -9,7 +9,8 @@
     "start": "node --env-file-if-exists=.env dist/server.js",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "glossaries:sync": "tsx --env-file-if-exists=.env src/scripts/sync-glossaries.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

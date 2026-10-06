@@ -31,6 +31,13 @@ Also touch: src/services/translation/translateTexts.ts (the single DeepL path)
 Start in: src/services/review/ClaudeTranslationReviewer.ts (`SYSTEM_PROMPT`)
 Model: `ANTHROPIC_REVIEW_MODEL` env var; key: `anthropic-api-key` secret
 
+## To add or rename a Key Vault secret / glossary
+`src/config/key-vault-names.ts`: logical name → vault name. A new glossary
+language = add `deepl-glossary-<lang>` there and the language to
+`KEY_VAULT_GLOSSARY_LANGUAGES`, then `npm run glossaries:sync`
+(`-- --dry-run` first). Locally, also add any new logical name to
+`DummySecretsProvider`.
+
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 

@@ -29,3 +29,10 @@ Fastify's plugin system is also how you register hooks that run on every (or eve
 In C# lingo, a per-route hook like `preValidation` is an action filter's `OnActionExecuting` that runs *before* model binding/validation. Fastify validates `request.body` against the route's JSON schema before the handler runs — and a POST with no body at all fails `type: "object"` with 400 "body must be object", even when every property is optional. `src/routes/default-empty-body.ts` exports `defaultEmptyBody` (sets `request.body ??= {}`), used as `preValidation` on POSTs whose body is optional (lesson translations, generate, course title translations). Reuse it for any new POST whose body may be omitted entirely.
 
 Related gotcha: Fastify's default Ajv strips unknown properties instead of rejecting them, even with `additionalProperties: false` — a misspelled field is silently dropped, not a 400.
+
+## `src/scripts/` — one-off commands (`npm run glossaries:sync`)
+Plain TS files run with `tsx`, like a .NET console app next to the web
+project: each is its own small composition root (builds the secrets
+provider and db client itself, reusing `buildSecretsProvider` from
+`container.ts` and the same service functions the routes use), does its
+job, and exits with 0/1. Registered as npm scripts in `package.json`.

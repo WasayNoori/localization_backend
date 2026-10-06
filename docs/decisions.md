@@ -432,6 +432,20 @@ stale (same translate + review pipeline), so titles reviewed after the
 scaffolding step aren't silently redone by later script work.
 Re-translating current titles is the scaffolding command's `mode: all`.
 
+## Key Vault names mapped in one file; glossary ids synced into the DB
+The vault ("AIFastAPI") is shared with other apps and uses its own secret
+names (`SP-DEEPL-API-KEY`, `Claude-API-Key`, `ElevenLabsAPIKey`). Code keeps
+asking `ISecretsProvider` for logical names; `config/key-vault-names.ts` is
+the only place that maps them, and `AzureKeyVaultSecretsProvider` applies
+it (unmapped names are looked up as-is). Chosen over renaming vault secrets,
+which other apps may read.
+Glossary ids also live in the vault (`DeeplGlossary-<Language>`), but the
+`glossaries` table stays the runtime source: ids aren't secrets, every
+translation snapshots the id it used, and `PUT /languages/:lang/glossary`
+keeps working. `npm run glossaries:sync` copies vault → table (es, fr, it;
+`DeeplGlossary2` is unused and ignored). Chosen over reading the vault on
+every translation (two sources of truth, vault access on the hot path).
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?
