@@ -446,6 +446,14 @@ keeps working. `npm run glossaries:sync` copies vault → table (es, fr, it;
 `DeeplGlossary2` is unused and ignored). Chosen over reading the vault on
 every translation (two sources of truth, vault access on the hot path).
 
+## Local real secrets in a git-ignored file
+`DummySecretsProvider` also reads `.secrets.local.json` (git-ignored; template
+`.secrets.local.example.json`), keyed by logical name; its values win over
+the built-in dummy map. Lets local runs use real keys (e.g. the Claude key)
+without Key Vault access (a service principal needs tenant-admin rights) and
+without committing them. Next step: move the real values still hard-coded
+in `dummySecretsProvider.ts` into this file and rotate them.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

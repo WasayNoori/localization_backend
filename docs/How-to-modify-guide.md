@@ -38,6 +38,11 @@ language = add `deepl-glossary-<lang>` there and the language to
 (`-- --dry-run` first). Locally, also add any new logical name to
 `DummySecretsProvider`.
 
+## To use a real key locally (dummy mode)
+Copy `.secrets.local.example.json` to `.secrets.local.json` (git-ignored) and
+add `"<logical name>": "<value>"` — e.g. `anthropic-api-key`. Restart the
+server; the file is read once at startup.
+
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 
