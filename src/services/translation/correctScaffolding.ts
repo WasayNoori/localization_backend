@@ -15,6 +15,8 @@ import { TranslateScaffoldingError } from "./translateScaffolding.js";
 /** Hand corrections to one course's scaffolding in one language. Every field is optional. */
 export interface ScaffoldingCorrections {
   courseName?: string;
+  /** Needs an English course description. With no course translation yet, give courseName too. */
+  courseDescription?: string;
   sections?: { sectionId: string; title: string }[];
   /** Omit a field to keep it. A lesson with no translation yet needs lessonName (and description if the English has one). */
   lessons?: { lessonId: string; lessonName?: string; description?: string }[];
@@ -51,13 +53,29 @@ export async function correctScaffolding(
     return trimmed;
   };
   const courseName = text(corrections.courseName, "Course name");
+  const courseDescription = text(corrections.courseDescription, "Course description");
+  const courseChanged = courseName !== undefined || courseDescription !== undefined;
   const sectionInput = (corrections.sections ?? []).map((s) => ({ sectionId: s.sectionId, title: text(s.title, "Section title")! }));
   const lessonInput = (corrections.lessons ?? []).map((l) => ({
     lessonId: l.lessonId,
     lessonName: text(l.lessonName, `Name of ${l.lessonId}`),
     description: text(l.description, `Description of ${l.lessonId}`),
   }));
-  if (courseName === undefined && !sectionInput.length && !lessonInput.length) throw bad("Nothing to correct");
+  if (!courseChanged && !sectionInput.length && !lessonInput.length) throw bad("Nothing to correct");
+  if (courseDescription !== undefined && !course.description) throw bad(`Course ${courseId} has no English description to translate`);
+  const [existingCourseTr] = courseChanged
+    ? await db
+        .select()
+        .from(courseTranslations)
+        .where(and(eq(courseTranslations.courseId, courseId), eq(courseTranslations.targetLanguage, targetLanguage)))
+        .limit(1)
+    : [];
+  const newCourseName = courseName ?? existingCourseTr?.courseName;
+  const newCourseDescription = course.description ? (courseDescription ?? existingCourseTr?.description ?? null) : null;
+  if (courseChanged && !newCourseName) throw bad("The course has no translation yet — give courseName");
+  if (courseChanged && course.description && !newCourseDescription) {
+    throw bad("The course has no translated description yet — give courseDescription");
+  }
 
   const sectionRows = sectionInput.length
     ? await db
@@ -109,8 +127,14 @@ export async function correctScaffolding(
   });
 
   await db.transaction(async (tx) => {
-    if (courseName !== undefined) {
-      const values = { courseName, sourceCourseName: course.courseName, ...corrected };
+    if (courseChanged) {
+      const values = {
+        courseName: newCourseName!,
+        description: newCourseDescription,
+        sourceCourseName: course.courseName,
+        sourceDescription: course.description,
+        ...corrected,
+      };
       await tx
         .insert(courseTranslations)
         .values({ courseId, targetLanguage, ...values })
@@ -134,6 +158,6 @@ export async function correctScaffolding(
   return {
     courseId,
     targetLanguage,
-    corrected: { course: courseName !== undefined ? 1 : 0, sections: sectionInput.length, lessons: lessonValues.length },
+    corrected: { course: courseChanged ? 1 : 0, sections: sectionInput.length, lessons: lessonValues.length },
   };
 }

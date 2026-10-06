@@ -75,6 +75,7 @@ export async function coursesRoute(app: FastifyInstance) {
           properties: {
             id: { type: "string", minLength: 1 },
             courseName: { type: "string", minLength: 1 },
+            description: { type: "string" },
             status: { type: "string", enum: ["Released", "Draft"] },
             sections: { type: "array", items: sectionImportSchema },
           },
@@ -225,6 +226,7 @@ export async function coursesRoute(app: FastifyInstance) {
           additionalProperties: false,
           properties: {
             courseName: { type: "string" },
+            courseDescription: { type: "string" },
             sections: {
               type: "array",
               items: {

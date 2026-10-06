@@ -485,6 +485,15 @@ glossary per language. The `glossaries` table stays the runtime source (and
 each translation still snapshots the id it used). The vault's
 `DeeplGlossary-*` secrets are no longer read.
 
+## Course description is scaffolding
+`courses.description` is learner-facing, so it's translated with the rest of
+the scaffolding (same DeepL path + Claude review, same staleness and
+hand-correction rules) and stored on the course's existing
+`course_translations` row — one row per course + language, like lessons'
+name + description — rather than a separate table. Set through the import
+(`description`, optional; omitted = unchanged). A course translated before
+the description existed shows as stale until "Translate missing" runs.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

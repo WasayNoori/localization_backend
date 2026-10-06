@@ -13,8 +13,8 @@ import {
 import type { ITranslationReviewer, ReviewItem, ReviewVerdict } from "../../interfaces/ITranslationReviewer.js";
 import { translateTexts, type TranslateTextsDeps } from "./translateTexts.js";
 
-// "Scaffolding" = a course's name, section titles, lesson names and lesson
-// descriptions — everything learners see around the lesson audio.
+// "Scaffolding" = a course's name and description, section titles, lesson
+// names and lesson descriptions — everything learners see around the lesson audio.
 
 export interface TranslateScaffoldingDeps extends TranslateTextsDeps {
   translationReviewer: ITranslationReviewer;
@@ -55,6 +55,7 @@ export interface TranslateCourseScaffoldingResult {
 }
 
 type LessonRow = typeof lessons.$inferSelect;
+type CourseRow = typeof courses.$inferSelect;
 type ReviewFields = { reviewStatus: string | null; reviewNote: string | null; reviewedAt: Date | null };
 
 /**
@@ -104,7 +105,7 @@ export async function translateCourseScaffolding(
   // "current" = translated from today's English. A current hand correction is
   // kept even in mode "all"; a stale one is replaced like any stale row.
   const all = mode === "all";
-  const courseRow = inLang(existingCourse).find((r) => r.sourceCourseName === course.courseName);
+  const courseRow = inLang(existingCourse).find((r) => !courseTitlesStale(r, course));
   const currentSections = new Map(
     inLang(existingSections)
       .filter((r) => sections.find((s) => s.id === r.sectionId)?.title === r.sourceTitle)
@@ -125,22 +126,24 @@ export async function translateCourseScaffolding(
     [...currentLessons.values()].filter((r) => r.editedAt).length;
 
   const items: Omit<ReviewItem, "translation">[] = [];
-  if (doCourse) items.push({ key: `course:${course.id}`, kind: "course", source: course.courseName });
+  if (doCourse) items.push(...courseItems(course));
   for (const s of doSections) items.push({ key: `section:${s.id}`, kind: "section", source: s.title });
   for (const l of doLessons) items.push(...lessonItems(l));
 
-  const outline = courseOutline(course.courseName, sections, lessonList);
+  const outline = courseOutline(course, sections, lessonList);
   const { translations, glossaryId, verdicts, review } = await translateAndReview(deps, items, targetLanguage, outline, outline);
   const now = new Date();
 
   await db.transaction(async (tx) => {
     if (doCourse) {
-      const key = `course:${course.id}`;
+      const keys = courseItems(course).map((i) => i.key);
       const values = {
-        courseName: translations.get(key)!,
+        courseName: translations.get(`course:${course.id}`)!,
+        description: course.description ? translations.get(`courseDescription:${course.id}`)! : null,
         sourceCourseName: course.courseName,
+        sourceDescription: course.description,
         deeplGlossaryId: glossaryId ?? null,
-        ...reviewFields([key], verdicts, now),
+        ...reviewFields(keys, verdicts, now),
         editedAt: null,
         updatedAt: now,
       };
@@ -219,6 +222,13 @@ export async function translateLessonScaffoldingIfNeeded(
   return { translated: true, review };
 }
 
+export function courseTitlesStale(
+  t: { sourceCourseName: string; sourceDescription: string | null },
+  course: { courseName: string; description: string | null }
+): boolean {
+  return t.sourceCourseName !== course.courseName || (t.sourceDescription ?? null) !== (course.description ?? null);
+}
+
 export function lessonTitlesStale(
   t: { sourceLessonName: string; sourceDescription: string | null },
   lesson: { lessonName: string; description: string | null }
@@ -274,9 +284,17 @@ function lessonItems(l: LessonRow): Omit<ReviewItem, "translation">[] {
   ];
 }
 
-function courseOutline(courseName: string, sections: { sectionIndex: number; title: string }[], lessonList: LessonRow[]): string {
+function courseItems(c: CourseRow): Omit<ReviewItem, "translation">[] {
   return [
-    `Course: ${courseName}`,
+    { key: `course:${c.id}`, kind: "course", source: c.courseName },
+    ...(c.description ? [{ key: `courseDescription:${c.id}`, kind: "courseDescription" as const, source: c.description }] : []),
+  ];
+}
+
+function courseOutline(c: CourseRow, sections: { sectionIndex: number; title: string }[], lessonList: LessonRow[]): string {
+  return [
+    `Course: ${c.courseName}`,
+    ...(c.description ? [`Course description: ${c.description}`] : []),
     ...sections.map((s) => `Section ${s.sectionIndex}: ${s.title}`),
     ...lessonList.map((l) => `Lesson: ${l.lessonName}`),
   ].join("\n");
@@ -291,7 +309,7 @@ function reviewFields(keys: string[], verdicts: Map<string, ReviewVerdict>, now:
   const found = keys.map((k) => verdicts.get(k));
   const flagged = found.filter((v): v is ReviewVerdict => !!v?.flagged);
   if (flagged.length) {
-    const label = (key: string) => (key.startsWith("lessonDescription") ? "Description" : "Name");
+    const label = (key: string) => (key.includes("Description:") ? "Description" : "Name");
     const note = flagged.map((v) => (keys.length > 1 ? `${label(v.key)}: ${v.reason}` : v.reason)).join(" ");
     return { reviewStatus: "flagged", reviewNote: note, reviewedAt: now };
   }

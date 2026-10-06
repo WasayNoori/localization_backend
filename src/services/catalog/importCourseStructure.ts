@@ -24,6 +24,8 @@ export interface ImportSectionInput {
 export interface ImportCourseInput {
   id: string;
   courseName: string;
+  /** Course description. Omit to leave the stored one unchanged; "" clears it. */
+  description?: string;
   /** 'Released' | 'Draft'. Omit to leave the stored status unchanged. */
   status?: "Released" | "Draft";
   sections: ImportSectionInput[];
@@ -34,6 +36,8 @@ export interface ImportCourseResult {
   /** True when nothing was saved (preview). */
   dryRun: boolean;
   courseCreated: boolean;
+  /** Existing course whose name, description or status changed. */
+  courseUpdated: boolean;
   sectionCount: number;
   lessonCount: number;
   sectionsAdded: { sectionIndex: number; title: string }[];
@@ -85,7 +89,8 @@ export async function importCourseStructure(
 
   try {
     return await db.transaction(async (tx) => {
-      const [existingCourse] = await tx.select({ id: courses.id }).from(courses).where(eq(courses.id, input.id)).limit(1);
+      const [existingCourse] = await tx.select().from(courses).where(eq(courses.id, input.id)).limit(1);
+      const description = input.description === undefined ? undefined : input.description.trim() || null;
       const previousSections = await tx
         .select({ sectionIndex: courseSections.sectionIndex, title: courseSections.title })
         .from(courseSections)
@@ -97,11 +102,12 @@ export async function importCourseStructure(
 
       await tx
         .insert(courses)
-        .values({ id: input.id, courseName: input.courseName, status: input.status ?? null })
+        .values({ id: input.id, courseName: input.courseName, description: description ?? null, status: input.status ?? null })
         .onConflictDoUpdate({
           target: courses.id,
           set: {
             courseName: input.courseName,
+            ...(description !== undefined ? { description } : {}),
             ...(input.status !== undefined ? { status: input.status } : {}),
             updatedAt: now,
           },
@@ -133,6 +139,11 @@ export async function importCourseStructure(
         courseId: input.id,
         dryRun: !!options.dryRun,
         courseCreated: !existingCourse,
+        courseUpdated:
+          !!existingCourse &&
+          (existingCourse.courseName !== input.courseName ||
+            (description !== undefined && description !== existingCourse.description) ||
+            (input.status !== undefined && input.status !== existingCourse.status)),
         sectionCount: input.sections.length,
         lessonCount: allLessons.length,
         sectionsAdded: input.sections

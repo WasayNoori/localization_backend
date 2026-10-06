@@ -57,6 +57,13 @@
       "when": 1791302060698,
       "tag": "0007_scaffolding_manual_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791322931979,
+      "tag": "0008_course_description",
+      "breakpoints": true
     }
   ]
 }

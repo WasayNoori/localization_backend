@@ -96,6 +96,7 @@ building. Remains after LCMS ships; `id` itself never changes.
 |-----------------|-------------|--------------------------------------------------------------------------|
 | `id`            | text, PK    | Our own stable internal id, assigned manually today. Never rekeyed — downstream references to this id never need to change |
 | `course_name`   | text        |                                                                          |
+| `description`   | text, null  | Learner-facing course description; part of the scaffolding (translated into `course_translations.description`). Set via `POST /courses/import` |
 | `status`        | text, null  | `Released` \| `Draft`. Owned by the BI app/LCMS; set via `POST /courses/import` until a catalog sync exists |
 | `lcms_course_id`| text, null, unique | Mapping to the LCMS-issued course id, populated once LCMS ships. Null until then |
 | `created_at`    | timestamptz | default `now()`                                                         |
@@ -197,7 +198,7 @@ Translated catalog text, one row per item per language (composite PK
 
 | Table | Translated columns | Source snapshot |
 |---|---|---|
-| `course_translations` | `course_name` | `source_course_name` |
+| `course_translations` | `course_name`, `description` (null if no English description) | `source_course_name`, `source_description` |
 | `section_translations` | `title` | `source_title` |
 | `lesson_translations` | `lesson_name`, `description` (null if no English description) | `source_lesson_name`, `source_description` |
 

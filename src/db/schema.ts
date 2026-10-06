@@ -20,6 +20,8 @@ import { sql } from "drizzle-orm";
 export const courses = pgTable("courses", {
   id: text("id").primaryKey(),
   courseName: text("course_name").notNull(),
+  // Learner-facing course description; part of the scaffolding. Null = none.
+  description: text("description"),
   // 'Released' | 'Draft'. Nullable: owned by the BI app / LCMS, set via
   // POST /courses/import until a catalog sync exists.
   status: text("status"),
@@ -112,7 +114,10 @@ export const courseTranslations = pgTable(
       .references(() => courses.id, { onDelete: "cascade" }),
     targetLanguage: varchar("target_language", { length: 10 }).notNull(),
     courseName: text("course_name").notNull(),
+    // Null when the English course has no description.
+    description: text("description"),
     sourceCourseName: text("source_course_name").notNull(),
+    sourceDescription: text("source_description"),
     deeplGlossaryId: text("deepl_glossary_id"),
     // Claude sanity check of DeepL's output (flag-only, never a rewrite):
     // 'ok' | 'flagged'; null = not reviewed (reviewer failed or unavailable).

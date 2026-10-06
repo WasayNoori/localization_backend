@@ -4,7 +4,7 @@
 export interface ReviewItem {
   /** Caller's id for matching verdicts back (e.g. "section:<uuid>"). */
   key: string;
-  kind: "course" | "section" | "lessonName" | "lessonDescription";
+  kind: "course" | "courseDescription" | "section" | "lessonName" | "lessonDescription";
   source: string;
   translation: string;
 }

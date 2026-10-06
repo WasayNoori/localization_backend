@@ -10,7 +10,7 @@ import {
   lessonTranslations,
   sectionTranslations,
 } from "../../db/schema.js";
-import { lessonTitlesStale } from "../translation/translateScaffolding.js";
+import { courseTitlesStale, lessonTitlesStale } from "../translation/translateScaffolding.js";
 import { getLocalizationCoverage, sumCoverage, type LanguageCoverage } from "./getLocalizationCoverage.js";
 
 export interface CourseStructureLesson {
@@ -58,11 +58,12 @@ export interface CourseStructureSection {
 export interface CourseStructure {
   id: string;
   courseName: string;
+  description: string | null;
   status: string | null;
   updatedAt: Date;
   segmentCount: number;
   coverage: (LanguageCoverage & { lessonsComplete: number })[];
-  translations: { language: string; courseName: string; stale: boolean; review: ScaffoldingReview }[];
+  translations: { language: string; courseName: string; description: string | null; stale: boolean; review: ScaffoldingReview }[];
   sections: CourseStructureSection[];
   /** Members not placed in any section (e.g. rows from before sections existed). */
   unsectionedLessons: CourseStructureLesson[];
@@ -136,6 +137,7 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
   return {
     id: course.id,
     courseName: course.courseName,
+    description: course.description,
     status: course.status,
     updatedAt: course.updatedAt,
     segmentCount: totals.segmentCount,
@@ -145,7 +147,8 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
       .map((t) => ({
         language: t.targetLanguage,
         courseName: t.courseName,
-        stale: t.sourceCourseName !== course.courseName,
+        description: t.description,
+        stale: courseTitlesStale(t, course),
         review: reviewOf(t),
       })),
     sections: sectionRows.map((s) => ({

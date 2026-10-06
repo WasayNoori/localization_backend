@@ -46,9 +46,12 @@ calling `POST /lessons/:lessonId/parse`. Returns the created row with `201`;
 Sync — loads or refreshes a whole course structure in one transaction.
 Logic in `importCourseStructure` (`src/services/catalog/
 importCourseStructure.ts`), DB only. Body:
-`{ id, courseName, status?, sections: [{ sectionIndex, title, lessons: [{ id,
-lessonName, description?, scriptText?, tags? }] }] }` — sections and lessons in
-display order (array position becomes `course_lessons.position`).
+`{ id, courseName, description?, status?, sections: [{ sectionIndex, title,
+lessons: [{ id, lessonName, description?, scriptText?, tags? }] }] }` —
+sections and lessons in display order (array position becomes
+`course_lessons.position`). Course `description`: omit to keep the stored
+one, `""` to clear it. The result also has `courseUpdated` (existing course
+whose name, description or status changed).
 
 - Idempotent upsert: course by `id`, sections by `(course_id,
   section_index)`, lessons by `id`. The payload is the complete structure —
@@ -90,8 +93,9 @@ this course, `404` if the course doesn't exist. Never parses. Returns
 
 Sync — the **scaffolding command**: `translateCourseScaffolding`
 (`src/services/translation/translateScaffolding.ts`). Translates the course
-name, every section title and every lesson's name + description into one
-language, then has Claude sanity-check the results.
+name + description, every section title and every lesson's name +
+description into one language, then has Claude sanity-check the results.
+The course description is also part of the outline sent as context.
 
 1. DeepL via `translateTexts` (the single DeepL path: language glossary,
    English source; ≤50 texts per request) with the course outline (all
@@ -127,6 +131,7 @@ Sync — hand corrections: `correctScaffolding`
 ```json
 {
   "courseName": "…",
+  "courseDescription": "…",
   "sections": [{ "sectionId": "<uuid>", "title": "…" }],
   "lessons": [{ "lessonId": "25Sim04_05", "lessonName": "…", "description": "…" }]
 }
