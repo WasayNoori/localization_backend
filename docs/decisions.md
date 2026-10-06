@@ -454,6 +454,13 @@ without Key Vault access (a service principal needs tenant-admin rights) and
 without committing them. Next step: move the real values still hard-coded
 in `dummySecretsProvider.ts` into this file and rotate them.
 
+## Claude reviewer: tool_choice "auto", not forced
+First live run: `claude-sonnet-5-5` rejects a forced `tool_choice`
+("tool"/"any"). The reviewer now sends `auto`, tells the model to call
+`record_verdicts`, and treats a reply without that call as a review failure
+(rows saved unreviewed, same as the reviewer being down) — never as
+"nothing flagged".
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

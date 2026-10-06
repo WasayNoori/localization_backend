@@ -88,6 +88,8 @@ export class ClaudeTranslationReviewer implements ITranslationReviewer {
       "Course outline (English), for context:",
       request.context,
       "",
+      `Record a verdict for every item below by calling ${VERDICT_TOOL.name} once. Do not reply with text.`,
+      "",
       "Items to check:",
       JSON.stringify(
         items.map((it) => ({ key: it.key, type: KIND_LABEL[it.kind], english: it.source, translation: it.translation })),
@@ -105,10 +107,12 @@ export class ClaudeTranslationReviewer implements ITranslationReviewer {
       },
       body: JSON.stringify({
         model: this.model,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         tools: [VERDICT_TOOL],
-        tool_choice: { type: "tool", name: VERDICT_TOOL.name },
+        // "auto", not a forced tool: newer models reject forced tool_choice
+        // ("tool"/"any"). The prompt requires the call; a reply without it throws below.
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content: userMessage }],
       }),
     });
@@ -119,10 +123,14 @@ export class ClaudeTranslationReviewer implements ITranslationReviewer {
     }
 
     const body = (await response.json()) as {
+      stop_reason?: string;
       content: { type: string; name?: string; input?: { verdicts?: { key: string; flagged: boolean; reason?: string }[] } }[];
     };
     const toolUse = body.content.find((c) => c.type === "tool_use" && c.name === VERDICT_TOOL.name);
-    const raw = toolUse?.input?.verdicts ?? [];
+    if (!toolUse?.input?.verdicts) {
+      throw new Error(`Claude review returned no ${VERDICT_TOOL.name} call (stop_reason: ${body.stop_reason ?? "unknown"})`);
+    }
+    const raw = toolUse.input.verdicts;
 
     // Only keys we asked about; an item Claude skipped stays unreviewed (no verdict).
     const asked = new Set(items.map((it) => it.key));
