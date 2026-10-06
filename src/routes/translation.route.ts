@@ -1,6 +1,6 @@
 // src/routes/translation.route.ts
 import type { FastifyInstance } from "fastify";
-import { getGlossaryId } from "../services/translation/getGlossaryId.js";
+import { translateTexts } from "../services/translation/translateTexts.js";
 
 export async function translationRoute(app: FastifyInstance) {
   app.post(
@@ -37,16 +37,14 @@ export async function translationRoute(app: FastifyInstance) {
       }
 
       try {
-        const glossaryId = await getGlossaryId(app.db, targetLanguage);
+        const {
+          translatedTexts: [translatedText],
+        } = await translateTexts(
+          { db: app.db, translationService: app.translationService },
+          { texts: [text], targetLanguage, context }
+        );
 
-        const result = await app.translationService.translate({
-          text,
-          targetLanguage,
-          glossaryId,
-          context,
-        });
-
-        return reply.send(result);
+        return reply.send({ translatedText });
       } catch (err) {
         request.log.error(err, "Translation failed");
         return reply.code(502).send({

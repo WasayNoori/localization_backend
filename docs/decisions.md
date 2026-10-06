@@ -402,6 +402,36 @@ refreshes that lesson's name/description. `ITranslationService` gained
 `translateMany` (DeepL's multi-text request) for this. Lesson tags are
 stored (`lessons.tags`) but not translated.
 
+## One DeepL path for all translation
+Every translation — segments, scaffolding, ad-hoc `/translate` — goes
+through `translateTexts` (`src/services/translation/translateTexts.ts`),
+which resolves the language's glossary and sets an English source.
+Callers choose only texts and context; nothing calls
+`ITranslationService` or looks up a glossary directly, so no path can
+skip the glossary.
+
+## Scaffolding has its own command, and Claude only flags clear errors
+Course name, section titles and lesson names/descriptions ("scaffolding")
+are translated by one command, `POST /courses/:courseId/scaffolding/
+translations/:lang` (`mode: missing | all`), replacing the earlier titles
+endpoint. After DeepL, Claude reviews the translations with the course
+outline as context. DeepL is the core translator, so the review is biased
+toward it: Claude flags only clearly wrong translations (meaning lost,
+nonsense in a CAD context, wrong language, garbled), never style, and
+never proposes alternatives — DeepL's text is always stored; a flag is
+advice for a human. Claude gets no glossary: DeepL already applied it, and
+the reviewer's job is catching rare mistranslations from its own
+knowledge of the language. A reviewer failure never loses translations
+(rows are saved with `review_status` null). Workflow: glossary → translate
+scaffolding → review flags → scripts.
+
+## Lesson translation no longer re-translates current titles
+Supersedes part of "Catalog text … is translated too": a whole-lesson
+translate now fills the lesson's name/description only when missing or
+stale (same translate + review pipeline), so titles reviewed after the
+scaffolding step aren't silently redone by later script work.
+Re-translating current titles is the scaffolding command's `mode: all`.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

@@ -23,9 +23,13 @@ Also touch: src/routes/courses.route.ts (request schema), src/db/schema.ts
 Start in: src/services/catalog/getLessonLocalization.ts (per-segment status)
 Also touch: src/services/catalog/getLocalizationCoverage.ts (counts)
 
-## To change how titles/descriptions are translated
-Start in: src/services/translation/translateCatalogTitles.ts
-Also touch: src/interfaces/ITranslationService.ts (`translateMany`)
+## To change how scaffolding (titles/descriptions) is translated
+Start in: src/services/translation/translateScaffolding.ts
+Also touch: src/services/translation/translateTexts.ts (the single DeepL path)
+
+## To change what Claude flags in scaffolding translations
+Start in: src/services/review/ClaudeTranslationReviewer.ts (`SYSTEM_PROMPT`)
+Model: `ANTHROPIC_REVIEW_MODEL` env var; key: `anthropic-api-key` secret
 
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)

@@ -202,7 +202,11 @@ Translated catalog text, one row per item per language (composite PK
 | `lesson_translations` | `lesson_name`, `description` (null if no English description) | `source_lesson_name`, `source_description` |
 
 All three also carry `deepl_glossary_id` (snapshot), `created_at`,
-`updated_at`. A row is **stale** when its source snapshot differs from the
+`updated_at`, and Claude's sanity check of DeepL's output:
+`review_status` (`ok` | `flagged` | null = not reviewed), `review_note`
+(why it was flagged; for lessons prefixed `Name:` / `Description:`),
+`reviewed_at`. The review is flag-only — it never changes the stored
+translation. A row is **stale** when its source snapshot differs from the
 current English — same idea as `tts_clips.sentence_text`. Typed tables
 rather than one generic `(entity_type, entity_id, field)` table so every
 row has a real FK and disappears with its item. Section translations key

@@ -10,7 +10,7 @@ import {
   lessonTranslations,
   sectionTranslations,
 } from "../../db/schema.js";
-import { lessonTitlesStale } from "../translation/translateCatalogTitles.js";
+import { lessonTitlesStale } from "../translation/translateScaffolding.js";
 import { getLocalizationCoverage, sumCoverage, type LanguageCoverage } from "./getLocalizationCoverage.js";
 
 export interface CourseStructureLesson {
@@ -28,14 +28,25 @@ export interface CourseStructureLesson {
   localization: LanguageCoverage[];
   tags: string[];
   /** Translated name/description per language; `stale` = English changed since. */
-  translations: { language: string; lessonName: string; description: string | null; stale: boolean }[];
+  translations: { language: string; lessonName: string; description: string | null; stale: boolean; review: ScaffoldingReview }[];
 }
+
+/** Claude's sanity check: 'ok' | 'flagged' | null (not reviewed). `note` only when flagged. */
+export interface ScaffoldingReview {
+  status: "ok" | "flagged" | null;
+  note: string | null;
+}
+
+const reviewOf = (r: { reviewStatus: string | null; reviewNote: string | null }): ScaffoldingReview => ({
+  status: r.reviewStatus === "ok" || r.reviewStatus === "flagged" ? r.reviewStatus : null,
+  note: r.reviewNote,
+});
 
 export interface CourseStructureSection {
   id: string;
   sectionIndex: number;
   title: string;
-  translations: { language: string; title: string; stale: boolean }[];
+  translations: { language: string; title: string; stale: boolean; review: ScaffoldingReview }[];
   lessons: CourseStructureLesson[];
 }
 
@@ -46,7 +57,7 @@ export interface CourseStructure {
   updatedAt: Date;
   segmentCount: number;
   coverage: (LanguageCoverage & { lessonsComplete: number })[];
-  translations: { language: string; courseName: string; stale: boolean }[];
+  translations: { language: string; courseName: string; stale: boolean; review: ScaffoldingReview }[];
   sections: CourseStructureSection[];
   /** Members not placed in any section (e.g. rows from before sections existed). */
   unsectionedLessons: CourseStructureLesson[];
@@ -110,6 +121,7 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
           lessonName: t.lessonName,
           description: t.description,
           stale: lessonTitlesStale(t, l),
+          review: reviewOf(t),
         })),
     };
   };
@@ -125,7 +137,12 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
     coverage: totals.languages,
     translations: courseTr
       .sort(byLanguage)
-      .map((t) => ({ language: t.targetLanguage, courseName: t.courseName, stale: t.sourceCourseName !== course.courseName })),
+      .map((t) => ({
+        language: t.targetLanguage,
+        courseName: t.courseName,
+        stale: t.sourceCourseName !== course.courseName,
+        review: reviewOf(t),
+      })),
     sections: sectionRows.map((s) => ({
       id: s.id,
       sectionIndex: s.sectionIndex,
@@ -133,7 +150,7 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
       translations: sectionTr
         .filter((t) => t.sectionId === s.id)
         .sort(byLanguage)
-        .map((t) => ({ language: t.targetLanguage, title: t.title, stale: t.sourceTitle !== s.title })),
+        .map((t) => ({ language: t.targetLanguage, title: t.title, stale: t.sourceTitle !== s.title, review: reviewOf(t) })),
       lessons: memberRows.filter((m) => m.sectionId === s.id).map(toLesson),
     })),
     unsectionedLessons: memberRows.filter((m) => m.sectionId === null).map(toLesson),

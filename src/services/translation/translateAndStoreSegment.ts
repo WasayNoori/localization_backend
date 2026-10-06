@@ -2,7 +2,7 @@
 import type { Database } from "../../db/client.js";
 import { segmentTranslations } from "../../db/schema.js";
 import type { ITranslationService } from "../../interfaces/ITranslationService.js";
-import { getGlossaryId } from "./getGlossaryId.js";
+import { translateTexts } from "./translateTexts.js";
 import type { TranslationContext } from "./buildLessonContext.js";
 
 export interface TranslateAndStoreDeps {
@@ -29,14 +29,11 @@ export async function translateAndStoreSegment(
 ): Promise<TranslateAndStoreResult> {
   const { db } = deps;
 
-  const glossaryId = await getGlossaryId(db, targetLanguage);
-
-  const result = await deps.translationService.translate({
-    text: englishText,
-    targetLanguage,
+  const {
+    translatedTexts: [translatedText],
     glossaryId,
-    context: context?.text,
-  });
+  } = await translateTexts(deps, { texts: [englishText], targetLanguage, context: context?.text });
+  const result = { translatedText };
 
   const values = {
     translatedText: result.translatedText,

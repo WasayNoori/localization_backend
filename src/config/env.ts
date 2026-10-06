@@ -9,6 +9,9 @@ const envSchema = z.object({
   // Default Box folder for generated audio until the Box structure is
   // decided (docs/decisions.md). Not a secret — a folder id.
   BOX_AUDIO_FOLDER_ID: z.string().optional(),
+  // Claude model for the scaffolding translation sanity check. Not a secret;
+  // the API key comes from ISecretsProvider ("anthropic-api-key").
+  ANTHROPIC_REVIEW_MODEL: z.string().default("claude-sonnet-5-5"),
 });
 
 export type Env = z.infer<typeof envSchema>;

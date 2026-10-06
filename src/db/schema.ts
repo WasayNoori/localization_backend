@@ -114,6 +114,11 @@ export const courseTranslations = pgTable(
     courseName: text("course_name").notNull(),
     sourceCourseName: text("source_course_name").notNull(),
     deeplGlossaryId: text("deepl_glossary_id"),
+    // Claude sanity check of DeepL's output (flag-only, never a rewrite):
+    // 'ok' | 'flagged'; null = not reviewed (reviewer failed or unavailable).
+    reviewStatus: text("review_status"),
+    reviewNote: text("review_note"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -132,6 +137,11 @@ export const sectionTranslations = pgTable(
     title: text("title").notNull(),
     sourceTitle: text("source_title").notNull(),
     deeplGlossaryId: text("deepl_glossary_id"),
+    // Claude sanity check of DeepL's output (flag-only, never a rewrite):
+    // 'ok' | 'flagged'; null = not reviewed (reviewer failed or unavailable).
+    reviewStatus: text("review_status"),
+    reviewNote: text("review_note"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -153,6 +163,11 @@ export const lessonTranslations = pgTable(
     sourceLessonName: text("source_lesson_name").notNull(),
     sourceDescription: text("source_description"),
     deeplGlossaryId: text("deepl_glossary_id"),
+    // Claude sanity check of DeepL's output (flag-only, never a rewrite):
+    // 'ok' | 'flagged'; null = not reviewed (reviewer failed or unavailable).
+    reviewStatus: text("review_status"),
+    reviewNote: text("review_note"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

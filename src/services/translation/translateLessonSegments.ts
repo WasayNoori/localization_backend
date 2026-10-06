@@ -5,12 +5,9 @@ import { lessons, segmentTranslations, ttsClips } from "../../db/schema.js";
 import type { ITranslationService } from "../../interfaces/ITranslationService.js";
 import { loadLessonContext } from "./buildLessonContext.js";
 import { translateAndStoreSegment } from "./translateAndStoreSegment.js";
-import { translateLessonTitles } from "./translateCatalogTitles.js";
+import { translateLessonScaffoldingIfNeeded, type TranslateScaffoldingDeps } from "./translateScaffolding.js";
 
-export interface TranslateLessonDeps {
-  db: Database;
-  translationService: ITranslationService;
-}
+export interface TranslateLessonDeps extends TranslateScaffoldingDeps {}
 
 export interface TranslateLessonOptions {
   /** Restrict to these segments of the lesson (e.g. a UI multi-select). Default: every segment. */
@@ -29,10 +26,12 @@ export interface TranslateLessonResult {
    */
   audioStale: string[];
   /**
-   * The lesson's name + description. Translated on whole-lesson calls only
-   * (not when segmentIds narrows the call); `error` when that request failed.
+   * The lesson's name + description. On whole-lesson calls only (not when
+   * segmentIds narrows the call), and only when missing or stale — current
+   * titles are left to the course scaffolding command. `flagged` = Claude's
+   * review flagged them; `error` = translation or review failed.
    */
-  titles: { translated: boolean; error: string | null };
+  titles: { translated: boolean; flagged: boolean; error: string | null };
 }
 
 /**
@@ -88,13 +87,15 @@ export async function translateLessonSegments(
 
   const audioStale = await findStaleAudio(db, translated, targetLanguage);
 
-  const titles: TranslateLessonResult["titles"] = { translated: false, error: null };
+  const titles: TranslateLessonResult["titles"] = { translated: false, flagged: false, error: null };
   if (!wanted) {
     try {
       // forIndex(0): the whole script, or the opening window when it exceeds
       // the DeepL request-size cap — same rule as segment translation.
-      await translateLessonTitles(deps, lesson, targetLanguage, context.forIndex(0).text);
-      titles.translated = true;
+      const r = await translateLessonScaffoldingIfNeeded(deps, lesson, targetLanguage, context.forIndex(0).text);
+      titles.translated = r.translated;
+      titles.flagged = r.review.flagged > 0;
+      titles.error = r.review.error;
     } catch (err) {
       titles.error = err instanceof Error ? err.message : String(err);
     }

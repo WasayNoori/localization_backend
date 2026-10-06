@@ -17,6 +17,8 @@ import type { INlpService } from "../interfaces/INlpService.js";
 import { SpacyNlpService } from "../services/nlp/SpacyNlpService.js";
 import type { IAudioQcService } from "../interfaces/IAudioQcService.js";
 import { BasicAudioQcService } from "../services/qc/BasicAudioQcService.js";
+import type { ITranslationReviewer } from "../interfaces/ITranslationReviewer.js";
+import { ClaudeTranslationReviewer } from "../services/review/ClaudeTranslationReviewer.js";
 import { createDbClient, type Database } from "../db/client.js";
 
 export interface Secrets {
@@ -35,6 +37,7 @@ declare module "fastify" {
     translationService: ITranslationService;
     nlpService: INlpService;
     qcService: IAudioQcService;
+    translationReviewer: ITranslationReviewer;
     // decorate with concrete service implementations as they're built, ...
   }
 }
@@ -79,4 +82,7 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const qcService = new BasicAudioQcService();
   app.decorate("qcService", qcService);
+
+  const translationReviewer = new ClaudeTranslationReviewer(secretsProvider, env.ANTHROPIC_REVIEW_MODEL);
+  app.decorate("translationReviewer", translationReviewer);
 });

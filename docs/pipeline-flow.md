@@ -62,6 +62,18 @@ lesson-level functions it will call now exist (`parseLessonSegments`,
 
 ---
 
+## Scaffolding stage (per language, before scripts)
+
+1. Glossary for the language is in place (`PUT /languages/:lang/glossary`).
+2. `POST /courses/:courseId/scaffolding/translations/:lang` — DeepL
+   translates course name, section titles, lesson names/descriptions
+   (missing/stale by default; `mode: "all"` for everything), then Claude
+   flags clearly wrong items. A human reviews the flags.
+3. Scripts follow (import → parse → lesson translation → audio). Lesson
+   translation only fills a lesson's titles if they're missing or stale.
+
+---
+
 ## Generate stage: find-what's-missing resume loop
 
 `generateLocalizationForLesson` (`src/services/generation/

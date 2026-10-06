@@ -11,7 +11,11 @@ import {
 import { getCourseStructure } from "../services/catalog/getCourseStructure.js";
 import { listCourses } from "../services/catalog/listCourses.js";
 import { defaultEmptyBody } from "./default-empty-body.js";
-import { translateCourseTitles, TranslateTitlesError } from "../services/translation/translateCatalogTitles.js";
+import {
+  translateCourseScaffolding,
+  TranslateScaffoldingError,
+  type ScaffoldingMode,
+} from "../services/translation/translateScaffolding.js";
 import { updateCourseScripts, CourseScriptsError, type CourseScriptInput } from "../services/catalog/updateCourseScripts.js";
 
 const dryRunQuerystring = {
@@ -149,15 +153,16 @@ export async function coursesRoute(app: FastifyInstance) {
   );
 
   app.post(
-    "/courses/:courseId/titles/translations/:targetLanguage",
+    "/courses/:courseId/scaffolding/translations/:targetLanguage",
     {
       preValidation: defaultEmptyBody,
       schema: {
         description:
-          "Translates the course name, every section title and every lesson's name + description into one " +
-          "language (DeepL, batched ≤50 texts per request, course titles as context, language glossary). Only " +
-          "missing or stale items (English changed since) are sent unless force: true. Sync — a few DeepL " +
-          "requests, not a per-lesson fan-out. 400 for 'en', 404 if the course doesn't exist.",
+          "Scaffolding command: translates the course name, section titles and lesson names + descriptions into " +
+          "one language via DeepL (glossary + course outline as context), then Claude sanity-checks the results " +
+          "and flags only clearly wrong items (never rewrites; DeepL's text is stored). mode: 'missing' (default — " +
+          "never-translated or English-changed items only) or 'all'. A reviewer failure is reported in " +
+          "review.error; translations are still saved. 400 for 'en', 404 unknown course, 502 if DeepL fails.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",
@@ -167,29 +172,33 @@ export async function coursesRoute(app: FastifyInstance) {
         body: {
           type: "object",
           additionalProperties: false,
-          properties: { force: { type: "boolean" } },
+          properties: { mode: { type: "string", enum: ["missing", "all"] } },
         },
       },
     },
     async (request, reply) => {
       const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
-      const { force } = (request.body ?? {}) as { force?: boolean };
+      const { mode } = (request.body ?? {}) as { mode?: ScaffoldingMode };
       try {
         return reply.send(
-          await translateCourseTitles(
-            { db: app.db, translationService: app.translationService },
+          await translateCourseScaffolding(
+            {
+              db: app.db,
+              translationService: app.translationService,
+              translationReviewer: app.translationReviewer,
+            },
             courseId,
             targetLanguage,
-            { force }
+            mode ?? "missing"
           )
         );
       } catch (err) {
-        if (err instanceof TranslateTitlesError) {
+        if (err instanceof TranslateScaffoldingError) {
           return reply
             .code(err.statusCode)
             .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
-        request.log.error(err, "Title translation failed");
+        request.log.error(err, "Scaffolding translation failed");
         return reply.code(502).send({ error: "UpstreamError", message: err instanceof Error ? err.message : "Unknown error" });
       }
     }

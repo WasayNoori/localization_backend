@@ -86,19 +86,34 @@ this course, `404` if the course doesn't exist. Never parses. Returns
 
 ---
 
-## `POST /courses/:courseId/titles/translations/:targetLanguage`
+## `POST /courses/:courseId/scaffolding/translations/:targetLanguage`
 
-Sync — `translateCourseTitles` (`src/services/translation/
-translateCatalogTitles.ts`). Translates the course name, every section
-title and every lesson's name + description into one language, via
-`ITranslationService.translateMany` (DeepL, ≤50 texts per request, the
-course's English titles as `context`, the language's glossary). Only
-missing or stale items (English changed since) are sent unless body
-`{ force: true }`. Writes `course_translations`, `section_translations`,
-`lesson_translations`. Returns `{ courseId, targetLanguage, translated:
-{course, sections, lessons}, skipped: {…} }`. `400` for `en`, `404` if the
-course doesn't exist, `502` if DeepL fails (nothing written). Sync on
-purpose — a few DeepL requests, not a per-lesson fan-out.
+Sync — the **scaffolding command**: `translateCourseScaffolding`
+(`src/services/translation/translateScaffolding.ts`). Translates the course
+name, every section title and every lesson's name + description into one
+language, then has Claude sanity-check the results.
+
+1. DeepL via `translateTexts` (the single DeepL path: language glossary,
+   English source; ≤50 texts per request) with the course outline (all
+   English titles) as `context`.
+2. Claude (`ITranslationReviewer`) reviews the new translations with the
+   same outline and flags only clearly wrong items — meaning lost or
+   contradicted, nonsense in a CAD context, wrong language, garbled. It
+   never suggests alternatives; DeepL's text is always what's stored.
+3. Writes `course_translations`, `section_translations`,
+   `lesson_translations` with `review_status` (`ok` / `flagged` / null)
+   and `review_note`.
+
+Body (optional): `{ mode: "missing" | "all" }` — `missing` (default) sends
+only never-translated or English-changed items; `all` re-translates and
+re-reviews everything. Returns `{ courseId, targetLanguage, mode,
+translated: {course, sections, lessons}, skipped: {…}, review: { ran,
+flagged, error } }`. A reviewer failure (no `anthropic-api-key`, Claude
+down) is reported in `review.error` — translations are still saved,
+unreviewed. `400` for `en` or an unknown `mode`, `404` unknown course,
+`502` if DeepL fails (nothing written). Sync on purpose — a few batched
+requests, not a per-lesson fan-out. (Replaces `POST
+/courses/:courseId/titles/translations/:lang`.)
 
 ---
 
@@ -119,10 +134,12 @@ Sync, read-only — `getCourseStructure` (`src/services/catalog/
 getCourseStructure.ts`). Returns ordered sections → ordered lessons, each
 with `hasScript`, `boxFileId`, `parsedAt`, `segmentCount`, `parseStale`
 (script changed since last parse), `localization[]` per language, `tags`,
-and `translations[]` (`language`, `lessonName`, `description`, `stale`).
-Sections carry `translations[]` (`language`, `title`, `stale`) and the
-course carries `translations[]` (`language`, `courseName`, `stale`) —
-`stale` means the English changed after it was translated. The
+and `translations[]` (`language`, `lessonName`, `description`, `stale`,
+`review`). Sections carry `translations[]` (`language`, `title`, `stale`,
+`review`) and the course carries `translations[]` (`language`,
+`courseName`, `stale`, `review`) — `stale` means the English changed after
+it was translated; `review` is `{ status: "ok" | "flagged" | null, note }`
+from Claude's sanity check. The
 course itself also carries `status`, `segmentCount` and `coverage[]` (same
 shape as `GET /courses`). Lessons in the course with no section
 appear in `unsectionedLessons`. 404 if `courseId` doesn't exist.
@@ -201,7 +218,7 @@ part of resolving a lesson's segments. `502 UpstreamError` on DeepL failure.
 Sync, read-only — `getLessonLocalization` (`src/services/catalog/
 getLessonLocalization.ts`). The lesson (`lessonName`, `description`,
 `hasScript`, `parsedAt`, `parseStale`, `tags`, and `translation` — its
-name/description in this language with `stale`, or null) and its segments in order, each with
+name/description in this language with `stale` and `review`, or null) and its segments in order, each with
 `sourceText`, `translation` (`text`, `translatedAt`, `contextUsed`, or null),
 the current non-superseded `clip` (`id`, `qcStatus`, `qcIssues`, …, or
 null), a derived `status` (`not_translated` | `translated` | `audio_ready` |
@@ -220,9 +237,13 @@ existing `segment_translations` rows. Each call sends the whole English
 script as DeepL `context` (`buildLessonContext`), so terminology stays
 consistent while each translation still maps 1:1 to its segment.
 
-- A whole-lesson call (no `segmentIds`) also translates the lesson's name
-  and description (`titles: { translated, error }` in the response); a
-  `segmentIds` call doesn't.
+- A whole-lesson call (no `segmentIds`) also fills the lesson's name and
+  description **only if they're missing or stale** — through the same
+  translate + Claude review pipeline as the scaffolding command, with the
+  lesson script as DeepL context. Current titles are never re-translated
+  here (that's the scaffolding command's `mode: "all"`). Response:
+  `titles: { translated, flagged, error }`. A `segmentIds` call never
+  touches titles.
 - Text only — never touches `tts_clips`. `audioStale` lists segments whose
   active clip was spoken from different text than the new translation;
   regenerate those via the generate endpoint (`segmentId` + `force`).

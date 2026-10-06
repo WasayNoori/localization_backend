@@ -79,7 +79,12 @@ middleware/filter.
 
 ## 3. External dependencies
 
-**DeepL** translates segment text into target languages.
+**DeepL** translates everything — segment text and course scaffolding
+(course/section/lesson titles, descriptions) — through one path,
+`translateTexts`, which always applies the language's glossary.
+
+**Claude (Anthropic API)** sanity-checks scaffolding translations behind
+`ITranslationReviewer`: flags clearly wrong items only, never rewrites.
 
 **ElevenLabs** generates text-to-speech audio from either English or
 translated segment text.

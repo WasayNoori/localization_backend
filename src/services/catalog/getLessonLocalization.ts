@@ -2,7 +2,7 @@
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { lessons, lessonSegments, lessonTranslations, segmentTranslations, ttsClips } from "../../db/schema.js";
-import { lessonTitlesStale } from "../translation/translateCatalogTitles.js";
+import { lessonTitlesStale } from "../translation/translateScaffolding.js";
 
 export type SegmentLocalizationStatus = "not_translated" | "translated" | "audio_ready" | "qc_failed";
 
@@ -29,7 +29,13 @@ export interface LessonLocalization {
     parseStale: boolean;
     tags: string[];
     /** The lesson's name/description in this language; null if not translated (always null for "en"). */
-    translation: { lessonName: string; description: string | null; stale: boolean } | null;
+    translation: {
+      lessonName: string;
+      description: string | null;
+      stale: boolean;
+      /** Claude's sanity check: 'ok' | 'flagged' | null (not reviewed). */
+      review: { status: "ok" | "flagged" | null; note: string | null };
+    } | null;
   };
   language: string;
   segments: SegmentLocalization[];
@@ -90,7 +96,16 @@ export async function getLessonLocalization(
       parseStale: !!(lesson.parsedAt && lesson.scriptUpdatedAt && lesson.scriptUpdatedAt > lesson.parsedAt),
       tags: lesson.tags,
       translation: titleRow
-        ? { lessonName: titleRow.lessonName, description: titleRow.description, stale: lessonTitlesStale(titleRow, lesson) }
+        ? {
+            lessonName: titleRow.lessonName,
+            description: titleRow.description,
+            stale: lessonTitlesStale(titleRow, lesson),
+            review: {
+              status:
+                titleRow.reviewStatus === "ok" || titleRow.reviewStatus === "flagged" ? titleRow.reviewStatus : null,
+              note: titleRow.reviewNote,
+            },
+          }
         : null,
     },
     language,
