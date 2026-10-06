@@ -10,14 +10,5 @@ export const KEY_VAULT_SECRET_NAMES: Readonly<Record<string, string>> = {
   "deepl-api-key": "SP-DEEPL-API-KEY",
   "anthropic-api-key": "Claude-API-Key",
   "elevenlabs-api-key": "ElevenLabsAPIKey",
-  // DeepL glossary ids — read only by `npm run glossaries:sync`, which copies
-  // them into the glossaries table (the runtime source; see decisions.md).
-  "deepl-glossary-es": "DeeplGlossary-Spanish",
-  "deepl-glossary-fr": "DeeplGlossary-French",
-  "deepl-glossary-it": "DeeplGlossary-Italian",
 };
 
-/** Target languages whose glossary id lives in the vault as `deepl-glossary-<lang>`. */
-export const KEY_VAULT_GLOSSARY_LANGUAGES = ["es", "fr", "it"] as const;
-
-export const glossarySecretName = (targetLanguage: string) => `deepl-glossary-${targetLanguage}`;

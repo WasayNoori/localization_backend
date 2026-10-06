@@ -1,61 +1,35 @@
 // src/scripts/sync-glossaries.ts
 //
-// Copies DeepL glossary ids from Azure Key Vault into the glossaries table,
-// which stays the runtime source (getGlossaryId). Run after creating or
-// replacing a glossary in DeepL and updating its vault secret:
+// Points the glossaries table at the account's current DeepL glossaries
+// (newest ready English→X glossary per language). Run after uploading a
+// glossary — DeepL can't update one in place, so every upload is a new id:
 //
 //   npm run glossaries:sync              # write changes
 //   npm run glossaries:sync -- --dry-run # show what would change
 //
-// Glossary ids are always read from Key Vault (KEY_VAULT_URL, names mapped in
-// config/key-vault-names.ts). The database connection comes from the
-// configured SECRETS_PROVIDER, so this also works locally with the dummy
-// provider. Glossary ids aren't secrets, so they are printed.
-//
-// A small composition root of its own, like a .NET console app's Program.cs.
+// Same as POST /glossaries/sync. Uses the configured SECRETS_PROVIDER for
+// the DeepL key and database. A small composition root of its own, like a
+// .NET console app's Program.cs.
 
-import { env } from "../config/env.js";
-import { KEY_VAULT_GLOSSARY_LANGUAGES, KEY_VAULT_SECRET_NAMES, glossarySecretName } from "../config/key-vault-names.js";
 import { createDbClient } from "../db/client.js";
 import { buildSecretsProvider } from "../plugins/container.js";
-import { AzureKeyVaultSecretsProvider } from "../services/secrets/azureKeyVaultSecretsProvider.js";
-import { findGlossary, upsertGlossary } from "../services/glossaries/upsertGlossary.js";
+import { DeepLTranslationService } from "../services/translation/DeepLTranslationService.js";
+import { syncGlossariesFromProvider } from "../services/glossaries/syncGlossariesFromProvider.js";
 
 async function main(): Promise<number> {
   const dryRun = process.argv.includes("--dry-run");
-  if (!env.KEY_VAULT_URL) {
-    console.error("KEY_VAULT_URL is required (glossary ids are read from Key Vault).");
-    return 1;
+  const secrets = buildSecretsProvider();
+  const db = createDbClient(await secrets.getSecret("database-url"));
+  const r = await syncGlossariesFromProvider({ db, translationService: new DeepLTranslationService(secrets) }, { dryRun });
+
+  for (const c of r.changed) {
+    console.log(`${c.language}: ${dryRun ? "would " : ""}${c.from ? `${c.from} -> ` : "set "}${c.to}  (${c.name}, ${c.entryCount} entries)`);
   }
-
-  const vault = new AzureKeyVaultSecretsProvider(env.KEY_VAULT_URL, KEY_VAULT_SECRET_NAMES);
-  const db = createDbClient(await buildSecretsProvider().getSecret("database-url"));
-
-  let failed = 0;
-  for (const language of KEY_VAULT_GLOSSARY_LANGUAGES) {
-    let vaultId: string;
-    try {
-      vaultId = (await vault.getSecret(glossarySecretName(language))).trim();
-    } catch (err) {
-      failed++;
-      console.error(`${language}: ${err instanceof Error ? err.message : String(err)}`);
-      continue;
-    }
-
-    const current = await findGlossary(db, language);
-    if (current?.deeplGlossaryId === vaultId) {
-      console.log(`${language}: unchanged (${vaultId})`);
-      continue;
-    }
-    const change = current ? `${current.deeplGlossaryId} -> ${vaultId}` : `set ${vaultId}`;
-    if (!dryRun) {
-      await upsertGlossary(db, language, vaultId);
-    }
-    console.log(`${language}: ${dryRun ? "would " : ""}${change}`);
-  }
-
+  for (const u of r.unchanged) console.log(`${u.language}: unchanged (${u.name})`);
+  for (const i of r.ignored) console.log(`${i.language}: ignoring older glossary ${i.id} (${i.name}) — consider deleting it in DeepL`);
+  for (const n of r.notInProvider) console.log(`${n.language}: WARNING no glossary in DeepL; table still points at ${n.id}`);
   if (dryRun) console.log("Dry run: nothing written.");
-  return failed ? 1 : 0;
+  return 0;
 }
 
 main()

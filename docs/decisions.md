@@ -474,6 +474,17 @@ endpoints: same actor, same screen, and it allows an all-or-nothing batch.
 Glossary fixes still belong in the Glossary project; a correction fixes the
 course now.
 
+## Glossary ids come from DeepL itself
+Supersedes the glossary half of "Key Vault names mapped in one file; glossary
+ids synced into the DB". DeepL can't replace a glossary's entries (CSV upload
+creates a new glossary), so every glossary update is delete + re-create = a
+new id; keeping a copy of that id in Key Vault just adds a second place to
+update by hand. `glossaries:sync` / `POST /glossaries/sync` now list the
+account's glossaries via the DeepL key and pick the newest ready English→X
+glossary per language. The `glossaries` table stays the runtime source (and
+each translation still snapshots the id it used). The vault's
+`DeeplGlossary-*` secrets are no longer read.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

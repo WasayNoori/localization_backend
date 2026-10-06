@@ -224,9 +224,23 @@ voice settings (ElevenLabs tuning) are independent concerns even though
 both are one-row-per-language, per the endpoint-separation rule (see
 `docs/decisions.md`).
 
-To copy the ids kept in Key Vault (`DeeplGlossary-Spanish/French/Italian`)
-into this table, run `npm run glossaries:sync` (`-- --dry-run` to preview) —
-same upsert, no HTTP call.
+Usually you don't set ids by hand — `POST /glossaries/sync` (below) reads
+them from DeepL.
+
+---
+
+## `POST /glossaries/sync`
+
+Sync — `syncGlossariesFromProvider`
+(`src/services/glossaries/syncGlossariesFromProvider.ts`). Lists the DeepL
+account's glossaries and, for each target language, points `glossaries` at
+the newest **ready** English→X glossary. Run after every glossary upload:
+DeepL can't replace a glossary's entries, so an update is delete + re-create
+= new id. `?dryRun=true` reports without writing. Returns `{ dryRun,
+changed: [{language, from, to, name, entryCount}], unchanged: [...],
+ignored: [older glossaries for the same language], notInProvider: [table
+rows with no DeepL glossary — left as they are] }`. Never deletes rows.
+`502` if DeepL fails. CLI: `npm run glossaries:sync` (`-- --dry-run`).
 
 ---
 

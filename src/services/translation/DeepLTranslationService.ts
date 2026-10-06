@@ -1,6 +1,7 @@
 // src/services/translation/DeepLTranslationService.ts
 import type { ISecretsProvider } from "../../interfaces/index.js";
 import type {
+  GlossaryInfo,
   ITranslationService,
   TranslateManyRequest,
   TranslateManyResult,
@@ -54,5 +55,36 @@ export class DeepLTranslationService implements ITranslationService {
       throw new Error(`DeepL returned ${body.translations.length} translations for ${request.texts.length} texts`);
     }
     return { translatedTexts: body.translations.map((t) => t.text) };
+  }
+
+  async listGlossaries(): Promise<GlossaryInfo[]> {
+    const apiKey = await this.secretsProvider.getSecret("deepl-api-key");
+    const response = await fetch(`${DEEPL_BASE_URL}/v2/glossaries`, {
+      headers: { Authorization: `DeepL-Auth-Key ${apiKey}` },
+    });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`DeepL glossary list failed (${response.status}): ${errorText}`);
+    }
+    const body = (await response.json()) as {
+      glossaries: {
+        glossary_id: string;
+        name: string;
+        source_lang: string;
+        target_lang: string;
+        entry_count: number;
+        creation_time: string;
+        ready: boolean;
+      }[];
+    };
+    return body.glossaries.map((g) => ({
+      id: g.glossary_id,
+      name: g.name,
+      sourceLanguage: g.source_lang.toLowerCase(),
+      targetLanguage: g.target_lang.toLowerCase(),
+      entryCount: g.entry_count,
+      createdAt: new Date(g.creation_time),
+      ready: g.ready,
+    }));
   }
 }
