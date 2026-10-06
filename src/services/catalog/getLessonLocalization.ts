@@ -1,5 +1,6 @@
 // src/services/catalog/getLessonLocalization.ts
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { reviewOf, type ScaffoldingReview } from "./getCourseStructure.js";
 import type { Database } from "../../db/client.js";
 import { lessons, lessonSegments, lessonTranslations, segmentTranslations, ttsClips } from "../../db/schema.js";
 import { lessonTitlesStale } from "../translation/translateScaffolding.js";
@@ -33,8 +34,7 @@ export interface LessonLocalization {
       lessonName: string;
       description: string | null;
       stale: boolean;
-      /** Claude's sanity check: 'ok' | 'flagged' | null (not reviewed). */
-      review: { status: "ok" | "flagged" | null; note: string | null };
+      review: ScaffoldingReview;
     } | null;
   };
   language: string;
@@ -100,11 +100,7 @@ export async function getLessonLocalization(
             lessonName: titleRow.lessonName,
             description: titleRow.description,
             stale: lessonTitlesStale(titleRow, lesson),
-            review: {
-              status:
-                titleRow.reviewStatus === "ok" || titleRow.reviewStatus === "flagged" ? titleRow.reviewStatus : null,
-              note: titleRow.reviewNote,
-            },
+            review: reviewOf(titleRow),
           }
         : null,
     },

@@ -31,15 +31,20 @@ export interface CourseStructureLesson {
   translations: { language: string; lessonName: string; description: string | null; stale: boolean; review: ScaffoldingReview }[];
 }
 
-/** Claude's sanity check: 'ok' | 'flagged' | null (not reviewed). `note` only when flagged. */
+/**
+ * Claude's sanity check: 'ok' | 'flagged' | null (not reviewed). `note` only when flagged.
+ * `edited` = a person corrected the text by hand (status/note are then null).
+ */
 export interface ScaffoldingReview {
   status: "ok" | "flagged" | null;
   note: string | null;
+  edited: boolean;
 }
 
-const reviewOf = (r: { reviewStatus: string | null; reviewNote: string | null }): ScaffoldingReview => ({
+export const reviewOf = (r: { reviewStatus: string | null; reviewNote: string | null; editedAt: Date | null }): ScaffoldingReview => ({
   status: r.reviewStatus === "ok" || r.reviewStatus === "flagged" ? r.reviewStatus : null,
   note: r.reviewNote,
+  edited: r.editedAt !== null,
 });
 
 export interface CourseStructureSection {

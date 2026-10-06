@@ -119,6 +119,10 @@ export const courseTranslations = pgTable(
     reviewStatus: text("review_status"),
     reviewNote: text("review_note"),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    // Set when a person corrected the text by hand (PUT .../scaffolding/
+    // translations/:lang); review fields are then null. "Re-translate all"
+    // keeps corrections; only a change to the English replaces them.
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -142,6 +146,10 @@ export const sectionTranslations = pgTable(
     reviewStatus: text("review_status"),
     reviewNote: text("review_note"),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    // Set when a person corrected the text by hand (PUT .../scaffolding/
+    // translations/:lang); review fields are then null. "Re-translate all"
+    // keeps corrections; only a change to the English replaces them.
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -168,6 +176,10 @@ export const lessonTranslations = pgTable(
     reviewStatus: text("review_status"),
     reviewNote: text("review_note"),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    // Set when a person corrected the text by hand (PUT .../scaffolding/
+    // translations/:lang); review fields are then null. "Re-translate all"
+    // keeps corrections; only a change to the English replaces them.
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

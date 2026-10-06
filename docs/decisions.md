@@ -461,6 +461,19 @@ First live run: `claude-sonnet-5-5` rejects a forced `tool_choice`
 (rows saved unreviewed, same as the reviewer being down) — never as
 "nothing flagged".
 
+## Hand corrections to scaffolding are kept by "Re-translate all"
+Flagged items are fixed by a person in the UI (`PUT
+/courses/:courseId/scaffolding/translations/:lang`), not by re-running
+DeepL with different settings. A correction is stored as typed, marked
+`edited_at`, and its Claude flag cleared. `mode: "all"` skips current
+corrections, otherwise every re-run would silently undo human fixes (DeepL's
+wording also varies between runs). A correction goes stale — and is
+replaced — only when the English changes. One `PUT` for the course's whole
+scaffolding (course name, sections, lessons) rather than three per-entity
+endpoints: same actor, same screen, and it allows an all-or-nothing batch.
+Glossary fixes still belong in the Glossary project; a correction fixes the
+course now.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

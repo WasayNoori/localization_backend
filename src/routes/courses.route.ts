@@ -16,6 +16,7 @@ import {
   TranslateScaffoldingError,
   type ScaffoldingMode,
 } from "../services/translation/translateScaffolding.js";
+import { correctScaffolding, type ScaffoldingCorrections } from "../services/translation/correctScaffolding.js";
 import { updateCourseScripts, CourseScriptsError, type CourseScriptInput } from "../services/catalog/updateCourseScripts.js";
 
 const dryRunQuerystring = {
@@ -200,6 +201,63 @@ export async function coursesRoute(app: FastifyInstance) {
         }
         request.log.error(err, "Scaffolding translation failed");
         return reply.code(502).send({ error: "UpstreamError", message: err instanceof Error ? err.message : "Unknown error" });
+      }
+    }
+  );
+
+  app.put(
+    "/courses/:courseId/scaffolding/translations/:targetLanguage",
+    {
+      schema: {
+        description:
+          "Hand corrections to a course's scaffolding in one language — course name, section titles, lesson " +
+          "names/descriptions; every field optional. Stored as typed (no DeepL/Claude call), marked edited, " +
+          "Claude's flag cleared. 'Re-translate all' keeps corrections; only a change to the English replaces " +
+          "them. All-or-nothing. 400 bad/empty input or ids not in the course, 404 unknown course.",
+        security: [{ apiKey: [] }],
+        params: {
+          type: "object",
+          required: ["courseId", "targetLanguage"],
+          properties: { courseId: { type: "string" }, targetLanguage: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            courseName: { type: "string" },
+            sections: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["sectionId", "title"],
+                properties: { sectionId: { type: "string", format: "uuid" }, title: { type: "string" } },
+              },
+            },
+            lessons: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["lessonId"],
+                properties: { lessonId: { type: "string" }, lessonName: { type: "string" }, description: { type: "string" } },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
+      try {
+        return reply.send(await correctScaffolding(app.db, courseId, targetLanguage, request.body as ScaffoldingCorrections));
+      } catch (err) {
+        if (err instanceof TranslateScaffoldingError) {
+          return reply
+            .code(err.statusCode)
+            .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
+        }
+        throw err;
       }
     }
   );

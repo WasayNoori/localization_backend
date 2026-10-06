@@ -106,14 +106,41 @@ language, then has Claude sanity-check the results.
 
 Body (optional): `{ mode: "missing" | "all" }` — `missing` (default) sends
 only never-translated or English-changed items; `all` re-translates and
-re-reviews everything. Returns `{ courseId, targetLanguage, mode,
-translated: {course, sections, lessons}, skipped: {…}, review: { ran,
-flagged, error } }`. A reviewer failure (no `anthropic-api-key`, Claude
+re-reviews everything except hand corrections whose English is unchanged
+(see `PUT` below). Returns `{ courseId, targetLanguage, mode,
+translated: {course, sections, lessons}, skipped: {…}, keptCorrections,
+review: { ran, flagged, error } }`. A reviewer failure (no `anthropic-api-key`, Claude
 down) is reported in `review.error` — translations are still saved,
 unreviewed. `400` for `en` or an unknown `mode`, `404` unknown course,
 `502` if DeepL fails (nothing written). Sync on purpose — a few batched
 requests, not a per-lesson fan-out. (Replaces `POST
 /courses/:courseId/titles/translations/:lang`.)
+
+---
+
+## `PUT /courses/:courseId/scaffolding/translations/:targetLanguage`
+
+Sync — hand corrections: `correctScaffolding`
+(`src/services/translation/correctScaffolding.ts`). Stores the text as typed
+— no DeepL or Claude call. Body, every part optional:
+
+```json
+{
+  "courseName": "…",
+  "sections": [{ "sectionId": "<uuid>", "title": "…" }],
+  "lessons": [{ "lessonId": "25Sim04_05", "lessonName": "…", "description": "…" }]
+}
+```
+
+Each row gets today's English as its source snapshot (so it's current),
+`edited_at = now()`, and Claude's review cleared (a person decided). A lesson
+field left out keeps its current translation; a lesson with no translation
+yet needs `lessonName` (and `description` if the English has one). All-or-
+nothing: any bad item → `400`, nothing written. `400` also for `en`, empty
+text, or ids not in this course; `404` unknown course. Returns `{ courseId,
+targetLanguage, corrected: {course, sections, lessons} }`. Corrections
+survive `mode: "all"`; once the English changes they're stale and the next
+run replaces them like any other stale row.
 
 ---
 

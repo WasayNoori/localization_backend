@@ -20,7 +20,10 @@ export interface TranslateScaffoldingDeps extends TranslateTextsDeps {
   translationReviewer: ITranslationReviewer;
 }
 
-/** missing: only items never translated or whose English changed. all: everything. */
+/**
+ * missing: only items never translated or whose English changed.
+ * all: everything except hand corrections whose English is unchanged.
+ */
 export type ScaffoldingMode = "missing" | "all";
 
 export class TranslateScaffoldingError extends Error {
@@ -46,6 +49,8 @@ export interface TranslateCourseScaffoldingResult {
   mode: ScaffoldingMode;
   translated: { course: number; sections: number; lessons: number };
   skipped: { course: number; sections: number; lessons: number };
+  /** Hand corrections left as they are (counted in `skipped` too). */
+  keptCorrections: number;
   review: ScaffoldingReviewSummary;
 }
 
@@ -96,20 +101,28 @@ export async function translateCourseScaffolding(
   ]);
   const inLang = <T extends { targetLanguage: string }>(rows: T[]) => rows.filter((r) => r.targetLanguage === targetLanguage);
 
+  // "current" = translated from today's English. A current hand correction is
+  // kept even in mode "all"; a stale one is replaced like any stale row.
   const all = mode === "all";
-  const doCourse = all || !inLang(existingCourse).some((r) => r.sourceCourseName === course.courseName);
-  const currentSections = new Set(
+  const courseRow = inLang(existingCourse).find((r) => r.sourceCourseName === course.courseName);
+  const currentSections = new Map(
     inLang(existingSections)
       .filter((r) => sections.find((s) => s.id === r.sectionId)?.title === r.sourceTitle)
-      .map((r) => r.sectionId)
+      .map((r) => [r.sectionId, r])
   );
-  const currentLessons = new Set(
+  const currentLessons = new Map(
     inLang(existingLessons)
       .filter((r) => !lessonTitlesStale(r, lessonList.find((l) => l.id === r.lessonId)!))
-      .map((r) => r.lessonId)
+      .map((r) => [r.lessonId, r])
   );
-  const doSections = sections.filter((s) => all || !currentSections.has(s.id));
-  const doLessons = lessonList.filter((l) => all || !currentLessons.has(l.id));
+  const redo = (row: { editedAt: Date | null } | undefined) => !row || (all && !row.editedAt);
+  const doCourse = redo(courseRow);
+  const doSections = sections.filter((s) => redo(currentSections.get(s.id)));
+  const doLessons = lessonList.filter((l) => redo(currentLessons.get(l.id)));
+  const keptCorrections =
+    (courseRow?.editedAt ? 1 : 0) +
+    [...currentSections.values()].filter((r) => r.editedAt).length +
+    [...currentLessons.values()].filter((r) => r.editedAt).length;
 
   const items: Omit<ReviewItem, "translation">[] = [];
   if (doCourse) items.push({ key: `course:${course.id}`, kind: "course", source: course.courseName });
@@ -128,6 +141,7 @@ export async function translateCourseScaffolding(
         sourceCourseName: course.courseName,
         deeplGlossaryId: glossaryId ?? null,
         ...reviewFields([key], verdicts, now),
+        editedAt: null,
         updatedAt: now,
       };
       await tx
@@ -142,6 +156,7 @@ export async function translateCourseScaffolding(
         sourceTitle: s.title,
         deeplGlossaryId: glossaryId ?? null,
         ...reviewFields([key], verdicts, now),
+        editedAt: null,
         updatedAt: now,
       };
       await tx
@@ -164,6 +179,7 @@ export async function translateCourseScaffolding(
       sections: sections.length - doSections.length,
       lessons: lessonList.length - doLessons.length,
     },
+    keptCorrections,
     review,
   };
 }
@@ -300,6 +316,7 @@ async function upsertLessonTranslation(
     sourceDescription: lesson.description,
     deeplGlossaryId: glossaryId ?? null,
     ...reviewFields(keys, verdicts, now),
+    editedAt: null,
     updatedAt: now,
   };
   await db

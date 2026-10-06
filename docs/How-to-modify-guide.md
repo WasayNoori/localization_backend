@@ -43,6 +43,11 @@ Copy `.secrets.local.example.json` to `.secrets.local.json` (git-ignored) and
 add `"<logical name>": "<value>"` — e.g. `anthropic-api-key`. Restart the
 server; the file is read once at startup.
 
+## To change how hand corrections to scaffolding work
+`src/services/translation/correctScaffolding.ts` (validation + write) and
+the `redo` rule in `translateScaffolding.ts` (which rows `mode: "all"`
+re-translates). Column: `edited_at` on the three `*_translations` tables.
+
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 

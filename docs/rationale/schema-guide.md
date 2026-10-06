@@ -206,7 +206,9 @@ All three also carry `deepl_glossary_id` (snapshot), `created_at`,
 `review_status` (`ok` | `flagged` | null = not reviewed), `review_note`
 (why it was flagged; for lessons prefixed `Name:` / `Description:`),
 `reviewed_at`. The review is flag-only — it never changes the stored
-translation. A row is **stale** when its source snapshot differs from the
+translation. `edited_at` is set when a person corrected the text by hand
+(`PUT …/scaffolding/translations/:lang`; review fields are then null) and
+cleared when DeepL writes the row again. A row is **stale** when its source snapshot differs from the
 current English — same idea as `tts_clips.sentence_text`. Typed tables
 rather than one generic `(entity_type, entity_id, field)` table so every
 row has a real FK and disappears with its item. Section translations key
