@@ -266,6 +266,10 @@ export const segmentTranslations = pgTable(
     // not retroactively change what this row says was used.
     deeplGlossaryId: text("deepl_glossary_id"),
     contextUsed: text("context_used"),
+    // Snapshot of the language's formality setting used (null = none set).
+    // A row whose formality differs from the current setting is stale and
+    // gets re-translated by the course translation's "missing" mode.
+    formality: text("formality"),
     billedCharacters: integer("billed_characters"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -339,6 +343,17 @@ export const voiceSettingTemplates = pgTable("voice_setting_templates", {
 export const glossaries = pgTable("glossaries", {
   targetLanguage: varchar("target_language", { length: 10 }).primaryKey(),
   deeplGlossaryId: text("deepl_glossary_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// DeepL settings for one target language other than the glossary (which
+// stays in glossaries). Formality fixes formal vs informal "you" across a
+// language (Spanish usted vs tú) — without it DeepL decides per sentence.
+// No row = DeepL's default.
+export const languageTranslationSettings = pgTable("language_translation_settings", {
+  targetLanguage: varchar("target_language", { length: 10 }).primaryKey(),
+  // 'default' | 'more' | 'less' | 'prefer_more' | 'prefer_less' (ITranslationService.Formality)
+  formality: text("formality").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

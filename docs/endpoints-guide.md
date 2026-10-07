@@ -499,3 +499,6 @@ lesson/segment association. Not for pipeline use; see `POST
 /tts/synthesize` for the Box-backed one-off equivalent and
 `POST /lessons/:lessonId/localizations/:targetLanguage/generate` for the
 persisted pipeline path.
+### Translation settings per language
+- `GET /languages/translation-settings` — formality per configured language.
+- `PUT /languages/:targetLanguage/translation-settings` `{ "formality": "more" }` — `more` formal (usted/vous/Sie), `less` informal, `prefer_*` ignored by languages without formality, `default` = DeepL decides. Sent with every DeepL request for the language. Existing translations under a different formality become stale: `npm run course:translate -- <courseId> <lang>` (missing mode) re-translates them; their audio then needs regenerating.

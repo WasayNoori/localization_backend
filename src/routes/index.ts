@@ -6,6 +6,7 @@ import { translationRoute } from "./translation.route.js";
 import { jobsRoute } from "./jobs.route.js";
 import { lessonsRoute } from "./lessons.route.js";
 import { languageVoiceSettingsRoute } from "./language-voice-settings.route.js";
+import { languageTranslationSettingsRoute } from "./language-translation-settings.route.js";
 import { languageGlossaryRoute } from "./language-glossary.route.js";
 import { coursesRoute } from "./courses.route.js";
 import { segmentsRoute } from "./segments.route.js";
@@ -19,6 +20,7 @@ export async function routes(app: FastifyInstance) {
   await app.register(jobsRoute);
   await app.register(lessonsRoute);
   await app.register(languageVoiceSettingsRoute);
+  await app.register(languageTranslationSettingsRoute);
   await app.register(languageGlossaryRoute);
   await app.register(coursesRoute);
   await app.register(segmentsRoute);

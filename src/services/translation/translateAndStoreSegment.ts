@@ -15,7 +15,7 @@ export interface TranslateAndStoreResult {
 }
 
 /**
- * Calls DeepL (with this target language's glossary, if any, and the lesson
+ * Calls DeepL (with this target language's glossary and formality, if any, and the lesson
  * context) and writes the segment_translations row — overwriting any
  * existing row for this segment+language. Whether an existing row should be
  * reused instead (generate-stage resume) is the caller's decision.
@@ -32,6 +32,7 @@ export async function translateAndStoreSegment(
   const {
     translatedTexts: [translatedText],
     glossaryId,
+    formality,
   } = await translateTexts(deps, { texts: [englishText], targetLanguage, context: context?.text });
   const result = { translatedText };
 
@@ -39,6 +40,7 @@ export async function translateAndStoreSegment(
     translatedText: result.translatedText,
     deeplGlossaryId: glossaryId ?? null,
     contextUsed: context?.descriptor ?? null,
+    formality: formality ?? null,
     billedCharacters: null,
     // No updated_at column: created_at records when THIS translation was produced.
     createdAt: new Date(),

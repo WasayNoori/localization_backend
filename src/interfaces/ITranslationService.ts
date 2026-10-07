@@ -1,3 +1,11 @@
+/**
+ * Register for languages with formal/informal "you" (DeepL's formality):
+ * "more" = formal (usted, vous, Sie, Lei), "less" = informal (tú, tu, du).
+ * "prefer_*" fall back silently for languages without formality support.
+ */
+export const FORMALITY_VALUES = ["default", "more", "less", "prefer_more", "prefer_less"] as const;
+export type Formality = (typeof FORMALITY_VALUES)[number];
+
 export interface TranslateRequest {
   text: string;
   targetLanguage: string;
@@ -5,6 +13,8 @@ export interface TranslateRequest {
   sourceLanguage?: string;
   glossaryId?: string;
   context?: string;
+  /** Omitted = DeepL's default (it picks per sentence, which can mix registers). */
+  formality?: Formality;
 }
 
 export interface TranslateResult {

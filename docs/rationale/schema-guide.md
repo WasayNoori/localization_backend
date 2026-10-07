@@ -375,6 +375,20 @@ table, not a per-lesson setting.
 
 ---
 
+## `language_translation_settings`
+
+DeepL settings per target language besides the glossary. No row = DeepL defaults.
+
+| Column            | Type        | Notes                                                        |
+|-------------------|-------------|--------------------------------------------------------------|
+| `target_language` | varchar, PK | e.g. `es`                                                    |
+| `formality`       | text        | `default` \| `more` (formal) \| `less` \| `prefer_more` \| `prefer_less` |
+| `updated_at`      | timestamptz |                                                              |
+
+`segment_translations.formality` snapshots the value used; a mismatch with the
+current setting makes that translation stale (re-done by the course
+translation's "missing" mode).
+
 ## `tts_clips`
 
 One row per generated audio segment, in either English or a target language.

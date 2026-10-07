@@ -2,9 +2,14 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { courseLessons, courseSections, courses, lessonSegments, segmentTranslations } from "../../db/schema.js";
+import { getFormality } from "./getFormality.js";
 import { translateLessonSegments, type TranslateLessonDeps } from "./translateLessonSegments.js";
 
-/** missing: only segments with no translation in this language. all: every segment again. */
+/**
+ * missing: only segments with no translation in this language, or translated
+ * under a different formality than the language's current setting (stale).
+ * all: every segment again.
+ */
 export type CourseTranslationMode = "missing" | "all";
 
 export interface CourseTranslationProgress {
@@ -106,10 +111,11 @@ export async function courseLessonOrder(db: Database, courseId: string): Promise
 async function segmentState(db: Database, lessonId: string, targetLanguage: string) {
   const all = await db.select({ id: lessonSegments.id }).from(lessonSegments).where(eq(lessonSegments.lessonId, lessonId));
   if (!all.length) return { all, untranslated: [] as string[] };
+  const formality = (await getFormality(db, targetLanguage)) ?? null;
   const done = new Set(
     (
       await db
-        .select({ segmentId: segmentTranslations.segmentId })
+        .select({ segmentId: segmentTranslations.segmentId, formality: segmentTranslations.formality })
         .from(segmentTranslations)
         .where(
           and(
@@ -117,7 +123,10 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
             inArray(segmentTranslations.segmentId, all.map((s) => s.id))
           )
         )
-    ).map((r) => r.segmentId)
+    )
+      // A translation made under a different formality is stale — redo it.
+      .filter((r) => r.formality === formality)
+      .map((r) => r.segmentId)
   );
   return { all, untranslated: all.map((s) => s.id).filter((id) => !done.has(id)) };
 }

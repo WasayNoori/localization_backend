@@ -42,6 +42,7 @@ export class DeepLTranslationService implements ITranslationService {
         target_lang: request.targetLanguage,
         glossary_id: request.glossaryId,
         context: request.context,
+        formality: request.formality,
       }),
     });
 

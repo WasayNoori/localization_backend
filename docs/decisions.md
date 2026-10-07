@@ -548,6 +548,19 @@ DeepL. Each clip also records the `previous_text`/`next_text` it was sent.
 Caveat: regenerating a segment overwrites its file, so a superseded row's
 `local_path` points at the new audio.
 
+## Formality per language, not a glossary entry
+DeepL picks formal/informal "you" per sentence unless told, so Spanish mixed
+tú and usted within lessons. A glossary can't fix it (the register lives in
+verb endings and possessives, and imperatives have no "you" to map), so the
+language's `formality` (language_translation_settings) goes with every DeepL
+request through `translateTexts`. Spanish = `more` (usted — matches the Spain
+Spanish SOLIDWORKS help; DeepL's `ES` target is already European Spanish).
+Each segment_translations row snapshots the formality it was made with; a
+row made under a different setting counts as untranslated in the course
+translation's "missing" mode, so changing a language's formality is a
+resumable re-translation. Scaffolding (titles/descriptions) isn't re-run
+automatically.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

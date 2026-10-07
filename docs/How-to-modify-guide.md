@@ -72,6 +72,11 @@ applied automatically vs listed for review: `whyNotMechanical` in
 or `LocalFolderClipStore` (`npm run audio:generate`, the local POC). File names
 come from `services/output/outputLayout.ts` (`clipFilePath`).
 
+## To change formal/informal "you" for a language
+`PUT /languages/:lang/translation-settings` (`language_translation_settings.formality`),
+applied in `services/translation/translateTexts.ts`. Then re-run
+`course:translate` for that language — rows with the old formality are stale.
+
 ## To change voice settings per language
 In the console: Settings. API: `PUT /languages/:lang/voice-settings`.
 Starting values for new languages: `src/config/voice-defaults.ts`. Allowed
