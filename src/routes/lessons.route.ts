@@ -253,6 +253,7 @@ export async function lessonsRoute(app: FastifyInstance) {
             qcService: app.qcService,
             fileStorageService: app.fileStorageService,
             voiceSettingsProvider: app.voiceSettingsProvider,
+            clipStore: app.clipStore,
             boxFolderId,
           },
           lessonId,

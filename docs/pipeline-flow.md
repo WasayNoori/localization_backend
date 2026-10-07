@@ -55,9 +55,19 @@ jobs. Loading + parsing a whole course's scripts is a CLI for now
 
 After translation, `POST /courses/:courseId/outputs/segments` (or `npm run
 outputs:segments`) writes `<Language> Segments.txt` per lesson under
-`LOCAL_OUTPUT_ROOT/<courseFolder>/<Language>/<lessonId>/`. Audio will land
-beside it in `<Language> Clips/` through the same `ILessonOutputStore` —
-not wired yet (audio is on hold).
+`LOCAL_OUTPUT_ROOT/<courseFolder>/<Language>/<lessonId>/`. Audio lands
+beside it in `<Language> Clips/` (POC, until Box is registered):
+
+```
+npm run audio:generate -- <courseId> "<courseFolder>" fr es it [--lessons a,b] [--estimate] [--max-seconds N]
+```
+
+`generateCourseAudio` calls the lesson-level generate loop below for each
+lesson (languages in parallel, lessons one at a time) with a
+`LocalFolderClipStore`; `tts_clips.local_path` records each file and
+`box_file_id` is backfilled once the clips are uploaded to Box.
+`--estimate` counts missing clips and characters without calling
+ElevenLabs. Lessons not fully translated are skipped (no DeepL calls).
 
 ---
 

@@ -387,6 +387,13 @@ export const ttsClips = pgTable(
     audioFormat: text("audio_format").notNull(),
     boxFileId: text("box_file_id"),
     boxFilePath: text("box_file_path"),
+    // POC: where the clip was saved on disk while Box isn't set up
+    // (LocalFolderClipStore). A later Box upload fills box_file_id from it.
+    localPath: text("local_path"),
+    // The previous_text / next_text actually sent to ElevenLabs for this clip
+    // (null at a lesson boundary, or when the neighbor had no translation yet).
+    previousText: text("previous_text"),
+    nextText: text("next_text"),
     // 'pending' | 'pass' | 'warn' | 'fail' | 'manual_review' | 'superseded'
     qcStatus: text("qc_status").notNull(),
     qcReport: jsonb("qc_report").$type<{ passed: boolean; issues: string[] }>(),

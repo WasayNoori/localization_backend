@@ -71,6 +71,13 @@
       "when": 1791341738168,
       "tag": "0009_script_source_text",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791354556728,
+      "tag": "0010_clip_local_path",
+      "breakpoints": true
     }
   ]
 }

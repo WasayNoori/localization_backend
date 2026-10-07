@@ -13,7 +13,8 @@
     "glossaries:sync": "tsx --env-file-if-exists=.env src/scripts/sync-glossaries.ts",
     "scripts:load": "tsx --env-file-if-exists=.env src/scripts/load-scripts.ts",
     "course:translate": "tsx --env-file-if-exists=.env src/scripts/translate-course.ts",
-    "outputs:segments": "tsx --env-file-if-exists=.env src/scripts/write-segments.ts"
+    "outputs:segments": "tsx --env-file-if-exists=.env src/scripts/write-segments.ts",
+    "audio:generate": "tsx --env-file-if-exists=.env src/scripts/generate-audio.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

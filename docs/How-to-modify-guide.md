@@ -67,6 +67,11 @@ Prompt: `src/services/proofreading/ClaudeScriptProofreader.ts`. What gets
 applied automatically vs listed for review: `whyNotMechanical` in
 `src/services/proofreading/applyScriptCorrections.ts`.
 
+## To change where generated clips are saved
+`IClipStore` — `BoxClipStore` (the generate endpoint, wired in `plugins/container.ts`)
+or `LocalFolderClipStore` (`npm run audio:generate`, the local POC). File names
+come from `services/output/outputLayout.ts` (`clipFilePath`).
+
 ## To change voice settings per language
 In the console: Settings. API: `PUT /languages/:lang/voice-settings`.
 Starting values for new languages: `src/config/voice-defaults.ts`. Allowed

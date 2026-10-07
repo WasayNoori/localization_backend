@@ -21,6 +21,8 @@ import { buildSecretsProvider } from "./secrets-provider.js";
 import { failInterruptedJobs } from "../services/jobs/courseTranslationJob.js";
 import type { ILessonOutputStore } from "../interfaces/ILessonOutputStore.js";
 import { LocalFolderLessonOutputStore } from "../services/output/LocalFolderLessonOutputStore.js";
+import type { IClipStore } from "../interfaces/IClipStore.js";
+import { BoxClipStore } from "../services/output/BoxClipStore.js";
 
 export interface Secrets {
   apiKey: string;
@@ -34,6 +36,8 @@ declare module "fastify" {
     db: Database;
     ttsService: ITextToSpeechService;
     fileStorageService: IFileStorageService;
+    /** Where the lesson generate endpoint saves clips (Box). */
+    clipStore: IClipStore;
     voiceSettingsProvider: IVoiceSettingsProvider;
     translationService: ITranslationService;
     nlpService: INlpService;
@@ -67,6 +71,7 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const fileStorageService = new BoxFileStorageService(secretsProvider);
   app.decorate("fileStorageService", fileStorageService);
+  app.decorate("clipStore", new BoxClipStore(fileStorageService));
 
   const voiceSettingsProvider = new DbVoiceSettingsProvider(db);
   app.decorate("voiceSettingsProvider", voiceSettingsProvider);

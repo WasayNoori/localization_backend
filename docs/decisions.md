@@ -534,6 +534,20 @@ row per language and previews it via `POST /tts/test`; voice and model
 choices come from the account (`GET /tts/options`). `voice_setting_templates`
 stays unused (candidate for removal).
 
+## Audio POC: clips saved locally until the Box app is registered (interim)
+Box app registration takes time, so audio generation doesn't wait for it.
+The generator saves clips through `IClipStore`: `BoxClipStore` (the lesson
+generate endpoint, unchanged) or `LocalFolderClipStore`, which writes into
+the course folder layout (`<Language> Clips/<lessonId>_<lang>_NNN.mp3`,
+numbered like `<Language> Segments.txt`). `tts_clips.local_path` records the
+file and `box_file_id` stays null; once Box is set up, the files are
+uploaded and `box_file_id` is backfilled from `local_path`. Course-level
+audio is a CLI for now (`npm run audio:generate`), not a job endpoint. It
+skips lessons that aren't fully translated, so generating audio never calls
+DeepL. Each clip also records the `previous_text`/`next_text` it was sent.
+Caveat: regenerating a segment overwrites its file, so a superseded row's
+`local_path` points at the new audio.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

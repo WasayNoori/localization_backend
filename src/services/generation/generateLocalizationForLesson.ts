@@ -13,6 +13,7 @@ import type { ITextToSpeechService } from "../../interfaces/ITextToSpeechService
 import type { IAudioQcService } from "../../interfaces/IAudioQcService.js";
 import type { IFileStorageService } from "../../interfaces/IFileStorageService.js";
 import type { IVoiceSettingsProvider } from "../../interfaces/IvoiceSettingsProvider.js";
+import type { IClipStore } from "../../interfaces/IClipStore.js";
 import { findMissingSegments } from "./findMissingSegments.js";
 import { translateAndStoreSegment } from "../translation/translateAndStoreSegment.js";
 import { buildLessonContext, type TranslationContext } from "../translation/buildLessonContext.js";
@@ -28,14 +29,20 @@ export interface GenerateLocalizationDeps {
   translationService: ITranslationService;
   ttsService: ITextToSpeechService;
   qcService: IAudioQcService;
-  fileStorageService: IFileStorageService;
+  /** Only for verifyBoxFiles — saving goes through clipStore. Omitted by the local-folder POC run. */
+  fileStorageService?: IFileStorageService;
   voiceSettingsProvider: IVoiceSettingsProvider;
+  /** Where clips are saved: Box normally, a local folder for the POC (see IClipStore). */
+  clipStore: IClipStore;
   /**
    * Box folder to upload generated clips into. Snapshotted onto the
    * lesson_localizations row the first time it's created for this
-   * lesson+language, then reused from there on subsequent calls.
+   * lesson+language, then reused from there on subsequent calls. Null when
+   * clips go to a local folder (filled in later by the Box backfill).
    */
-  boxFolderId: string;
+  boxFolderId: string | null;
+  /** Course folder for a local clip store, relative to its root. Null for Box. */
+  courseFolder?: string | null;
 }
 
 export interface GenerateLocalizationResult {
@@ -45,6 +52,8 @@ export interface GenerateLocalizationResult {
   missingSegments: number;
   succeeded: string[];
   errors: { segmentId: string; error: string }[];
+  /** True when shouldStop ended the run early. */
+  stopped?: boolean;
 }
 
 export interface GenerateLocalizationOptions {
@@ -59,6 +68,8 @@ export interface GenerateLocalizationOptions {
    * Box/DB drift is actually suspected (e.g. a file was deleted out of band).
    */
   verifyBoxFiles?: boolean;
+  /** Checked between segments; true stops cleanly (the rest stays missing for the next run). */
+  shouldStop?: () => boolean;
   /**
    * Force-regenerate every segment for this lesson+language, regardless of
    * whether it already has an active clip — supersedes all of them up
@@ -110,6 +121,7 @@ export async function generateLocalizationForLesson(
       activeSegmentIds.delete(clip.segmentId);
     }
   } else if (options.verifyBoxFiles) {
+    if (!deps.fileStorageService) throw new Error("verifyBoxFiles needs a file storage service");
     for (const clip of clipsInScope) {
       if (!clip.boxFileId) {
         continue;
@@ -141,7 +153,12 @@ export async function generateLocalizationForLesson(
   const succeeded: string[] = [];
   const errors: { segmentId: string; error: string }[] = [];
 
+  let stopped = false;
   for (const segment of missingSegments) {
+    if (options.shouldStop?.()) {
+      stopped = true;
+      break;
+    }
     try {
       const text =
         targetLanguage === "en"
@@ -178,8 +195,17 @@ export async function generateLocalizationForLesson(
       });
 
       const qc = await deps.qcService.check(synthesized.audio);
-      const folderId = lessonLocalization.boxFolderId ?? deps.boxFolderId;
-      const saved = await deps.fileStorageService.saveAudio(synthesized.audio, synthesized.requestId, folderId);
+      const saved = await deps.clipStore.save(
+        {
+          lessonId,
+          language: targetLanguage,
+          segmentNumber: segmentIndex + 1,
+          requestId: synthesized.requestId,
+          boxFolderId: lessonLocalization.boxFolderId ?? deps.boxFolderId,
+          courseFolder: deps.courseFolder ?? null,
+        },
+        synthesized.audio
+      );
 
       await db.insert(ttsClips).values({
         segmentId: segment.id,
@@ -193,8 +219,11 @@ export async function generateLocalizationForLesson(
         modelId,
         voiceSettings,
         audioFormat: AUDIO_FORMAT,
-        boxFileId: saved.fileId,
-        boxFilePath: saved.filePath,
+        boxFileId: saved.boxFileId,
+        boxFilePath: saved.boxFilePath,
+        localPath: saved.localPath,
+        previousText: previousText ?? null,
+        nextText: nextText ?? null,
         qcStatus: qc.passed ? "pass" : "fail",
         qcReport: qc,
         generationAttempt,
@@ -217,6 +246,7 @@ export async function generateLocalizationForLesson(
     missingSegments: missingSegments.length,
     succeeded,
     errors,
+    stopped,
   };
 }
 
