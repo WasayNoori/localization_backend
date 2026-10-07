@@ -2,9 +2,6 @@ import fp from "fastify-plugin";
 import type { FastifyInstance } from "fastify";
 import { env } from "../config/env.js";
 import type { ISecretsProvider } from "../interfaces/index.js";
-import { DummySecretsProvider } from "../services/secrets/dummySecretsProvider.js";
-import { AzureKeyVaultSecretsProvider } from "../services/secrets/azureKeyVaultSecretsProvider.js";
-import { CachingSecretsProvider } from "../services/secrets/cachingSecretsProvider.js";
 import type { ITextToSpeechService } from "../interfaces/ITextToSpeechService.js";
 import { ElevenLabsTtsService } from "../services/tts/ElevenLabsTtsService.js";
 import type { IFileStorageService } from "../interfaces/IFileStorageService.js";
@@ -20,7 +17,10 @@ import { BasicAudioQcService } from "../services/qc/BasicAudioQcService.js";
 import type { ITranslationReviewer } from "../interfaces/ITranslationReviewer.js";
 import { ClaudeTranslationReviewer } from "../services/review/ClaudeTranslationReviewer.js";
 import { createDbClient, type Database } from "../db/client.js";
-import { KEY_VAULT_SECRET_NAMES } from "../config/key-vault-names.js";
+import { buildSecretsProvider } from "./secrets-provider.js";
+import { failInterruptedJobs } from "../services/jobs/courseTranslationJob.js";
+import type { ILessonOutputStore } from "../interfaces/ILessonOutputStore.js";
+import { LocalFolderLessonOutputStore } from "../services/output/LocalFolderLessonOutputStore.js";
 
 export interface Secrets {
   apiKey: string;
@@ -39,23 +39,14 @@ declare module "fastify" {
     nlpService: INlpService;
     qcService: IAudioQcService;
     translationReviewer: ITranslationReviewer;
+    /** Null when LOCAL_OUTPUT_ROOT isn't set. */
+    lessonOutputStore: ILessonOutputStore | null;
     // decorate with concrete service implementations as they're built, ...
   }
 }
 
-/** Also used by CLI scripts (src/scripts), which are their own small composition roots. */
-export function buildSecretsProvider(): ISecretsProvider {
-  if (env.SECRETS_PROVIDER === "azure-key-vault") {
-    if (!env.KEY_VAULT_URL) {
-      throw new Error("KEY_VAULT_URL is required when SECRETS_PROVIDER=azure-key-vault");
-    }
-    return new AzureKeyVaultSecretsProvider(env.KEY_VAULT_URL, KEY_VAULT_SECRET_NAMES);
-  }
-  return new DummySecretsProvider();
-}
-
 export const container = fp(async (app: FastifyInstance) => {
-  const secretsProvider = new CachingSecretsProvider(buildSecretsProvider());
+  const secretsProvider = buildSecretsProvider();
   app.decorate("secretsProvider", secretsProvider);
 
   const [apiKey, databaseUrl] = await Promise.all([
@@ -66,6 +57,10 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const db = createDbClient(databaseUrl);
   app.decorate("db", db);
+
+  // Course jobs run in-process; any left "running" by a previous process died with it.
+  const interrupted = await failInterruptedJobs(db);
+  if (interrupted) app.log.warn(`Marked ${interrupted} interrupted processing job(s) as failed`);
 
   const ttsService = new ElevenLabsTtsService(secretsProvider);
   app.decorate("ttsService", ttsService);
@@ -87,4 +82,7 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const translationReviewer = new ClaudeTranslationReviewer(secretsProvider, env.ANTHROPIC_REVIEW_MODEL);
   app.decorate("translationReviewer", translationReviewer);
+
+  const lessonOutputStore = env.LOCAL_OUTPUT_ROOT ? new LocalFolderLessonOutputStore(env.LOCAL_OUTPUT_ROOT) : null;
+  app.decorate("lessonOutputStore", lessonOutputStore);
 });

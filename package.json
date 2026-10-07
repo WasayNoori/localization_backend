@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "glossaries:sync": "tsx --env-file-if-exists=.env src/scripts/sync-glossaries.ts"
+    "glossaries:sync": "tsx --env-file-if-exists=.env src/scripts/sync-glossaries.ts",
+    "scripts:load": "tsx --env-file-if-exists=.env src/scripts/load-scripts.ts",
+    "course:translate": "tsx --env-file-if-exists=.env src/scripts/translate-course.ts",
+    "outputs:segments": "tsx --env-file-if-exists=.env src/scripts/write-segments.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

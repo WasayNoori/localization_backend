@@ -18,14 +18,50 @@ Per endpoint, cover:
 
 Sync — straight read, no polling logic of its own (this endpoint IS what
 you poll). Returns the `processing_jobs` row as-is: `status`, `progress`
-(`{ succeeded, failed, total }`), timestamps. 404 if `jobId` doesn't exist.
-No service/interface underneath — queries `processing_jobs` directly.
+(`{ total, succeeded, failed, skipped?, options?, error? }`), timestamps.
+404 if `jobId` doesn't exist. No service/interface underneath — queries
+`processing_jobs` directly. `status`: `running` → `completed` (nothing
+failed) or `failed` (some lessons failed — `succeeded` still lists the rest;
+or the whole job died: `progress.error`). Jobs left `running` by a server
+restart are marked `failed` at startup with an "Interrupted" `error`.
 
-**Not yet documented here:** the course-level `POST
-/courses/:courseId/parse` and `POST
-/courses/:courseId/localizations/:targetLanguage/generate` endpoints that
-create the jobs this reads. Those, and the lesson-level parse endpoint they
-fan out to, aren't implemented yet — see `docs/decisions.md`.
+Jobs are created by `POST /courses/:courseId/translations/:lang` (below).
+Course-level parse and audio generate jobs aren't built yet.
+
+---
+
+## `POST /courses/:courseId/translations/:targetLanguage`
+
+Async — course translation job: `startCourseTranslationJob`
+(`src/services/jobs/courseTranslationJob.ts`) over `translateCourseLessons`
+(`src/services/translation/translateCourseLessons.ts`), which calls the
+lesson translation (`translateLessonSegments`) for each parsed lesson, one
+at a time, in course order. Body (optional): `{ mode: "missing" | "all" }`.
+`missing` (default) sends only segments with no translation in that
+language — so a re-run continues an interrupted or partly failed job; whole
+untranslated lessons also get their missing name/description. `all`
+re-translates every segment. Returns `202 { jobId, job }`; poll `GET
+/jobs/:jobId`. `409 { jobId, job }` if that course + language already has
+an active job. `400` for `en`, `404` unknown course. Text only — never
+audio. CLI equivalent (no server): `npm run course:translate -- <courseId>
+fr es it [--all] [--max-seconds N]`.
+
+---
+
+## `POST /courses/:courseId/outputs/segments`
+
+Sync — `writeCourseSegmentsFiles`
+(`src/services/output/writeCourseSegmentsFiles.ts`) through
+`ILessonOutputStore` (`LocalFolderLessonOutputStore`, root
+`LOCAL_OUTPUT_ROOT`). Body `{ languages: ["en","fr",…], courseFolder? }`
+(`courseFolder` relative to the root, default the course name; `..` and
+absolute paths → 400). Writes, per parsed lesson and language,
+`<courseFolder>/<Language>/<lessonId>/<Language> Segments.txt`: blocks of
+`001` + text, blank line between, CRLF, UTF-8 — numbers match the future
+clip names `<Language> Clips/<lessonId>_<lang>_001.mp3`. A translated file
+is written only when every segment is translated; otherwise listed in
+`skipped`. Overwrites. `400` if `LOCAL_OUTPUT_ROOT` isn't set. CLI:
+`npm run outputs:segments -- <courseId> "<courseFolder>" en fr es it`.
 
 ---
 

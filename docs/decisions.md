@@ -494,6 +494,19 @@ name + description — rather than a separate table. Set through the import
 (`description`, optional; omitted = unchanged). A course translated before
 the description existed shows as stale until "Translate missing" runs.
 
+## Course translation job; local output folder in place of Box (interim)
+Course translation is the first real processing job: one job per course +
+language, run in-process, lessons sequentially (each lesson already sends
+one DeepL request per segment, so concurrency would only add rate-limit
+risk), progress written after every lesson. Mode `missing` makes it
+resumable — no separate resume logic. Restart = job marked failed with a
+reason; re-run continues. Outputs go through `ILessonOutputStore`; the
+interim implementation writes the agreed Box layout to a local folder
+(`LOCAL_OUTPUT_ROOT`), so swapping in Box later changes only the store,
+not the layout or callers. Scripts are loaded from a folder of
+`<lessonId>.txt` files by a CLI (`scripts:load`), not an endpoint — files on
+the user's PC aren't reachable from a deployed server anyway.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

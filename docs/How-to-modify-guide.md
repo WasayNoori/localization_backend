@@ -51,6 +51,17 @@ server; the file is read once at startup.
 the `redo` rule in `translateScaffolding.ts` (which rows `mode: "all"`
 re-translates). Column: `edited_at` on the three `*_translations` tables.
 
+## To change the output folder layout / file names
+`src/services/output/outputLayout.ts` (folder + file names, Segments.txt
+format). Root: `LOCAL_OUTPUT_ROOT`. Language folder names:
+`src/config/languages.ts`. Box later = a new `ILessonOutputStore`
+implementation wired in `container.ts`.
+
+## To change how a course translation job runs
+Fan-out + resume rule: `src/services/translation/translateCourseLessons.ts`.
+Job row, conflict check, restart recovery:
+`src/services/jobs/courseTranslationJob.ts`.
+
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 

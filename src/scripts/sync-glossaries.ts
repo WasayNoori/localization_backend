@@ -12,7 +12,7 @@
 // .NET console app's Program.cs.
 
 import { createDbClient } from "../db/client.js";
-import { buildSecretsProvider } from "../plugins/container.js";
+import { buildSecretsProvider } from "../plugins/secrets-provider.js";
 import { DeepLTranslationService } from "../services/translation/DeepLTranslationService.js";
 import { syncGlossariesFromProvider } from "../services/glossaries/syncGlossariesFromProvider.js";
 

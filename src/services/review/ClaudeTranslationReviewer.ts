@@ -1,4 +1,5 @@
 // src/services/review/ClaudeTranslationReviewer.ts
+import { languageName } from "../../config/languages.js";
 import type { ISecretsProvider } from "../../interfaces/index.js";
 import type {
   ITranslationReviewer,
@@ -12,16 +13,6 @@ const ANTHROPIC_VERSION = "2023-06-01";
 // Short titles/descriptions: 60 per request keeps prompts small and responses fast.
 const BATCH_SIZE = 60;
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  fr: "French",
-  de: "German",
-  es: "Spanish",
-  it: "Italian",
-  pt: "Portuguese",
-  ja: "Japanese",
-  zh: "Chinese",
-  ko: "Korean",
-};
 
 const KIND_LABEL: Record<ReviewItem["kind"], string> = {
   course: "course name",
@@ -81,7 +72,7 @@ export class ClaudeTranslationReviewer implements ITranslationReviewer {
 
   private async reviewBatch(request: ReviewRequest, items: ReviewItem[]): Promise<ReviewVerdict[]> {
     const apiKey = await this.secretsProvider.getSecret("anthropic-api-key");
-    const language = LANGUAGE_NAMES[request.targetLanguage] ?? request.targetLanguage;
+    const language = languageName(request.targetLanguage);
 
     const userMessage = [
       `Target language: ${language} (${request.targetLanguage})`,

@@ -197,6 +197,12 @@ export interface ProcessingJobProgress {
   succeeded: string[];
   failed: { lessonId: string; error: string }[];
   total: number;
+  /** Lessons the job left alone, with why (e.g. "not parsed", "already translated"). */
+  skipped?: { lessonId: string; reason: string }[];
+  /** Options the job ran with, e.g. { mode: "missing" }. */
+  options?: Record<string, string>;
+  /** Why the job as a whole failed (crash, server restart) — per-lesson errors are in `failed`. */
+  error?: string;
 }
 
 // Tracks course-level async fan-out only. Lesson-level parse/generate stay
@@ -209,7 +215,7 @@ export const processingJobs = pgTable("processing_jobs", {
   scope: text("scope").notNull(),
   targetId: text("target_id").notNull(),
   type: text("type").notNull(),
-  // Set when type = 'generate'; null for 'parse'.
+  // Set when type = 'translate' | 'generate'; null for 'parse'.
   targetLanguage: text("target_language"),
   status: text("status").notNull(),
   progress: jsonb("progress").$type<ProcessingJobProgress>().notNull(),

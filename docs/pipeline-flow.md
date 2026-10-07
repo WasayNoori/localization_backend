@@ -15,7 +15,7 @@ Should cover:
 
 ---
 
-## Where the job boundary sits (design, not yet built)
+## Where the job boundary sits (translation built; parse/generate jobs not yet)
 
 Lesson-level parse/generate are synchronous — call in, work happens, result
 comes back in the same request. Course-level parse/generate fan out across
@@ -42,10 +42,22 @@ scope is where the job boundary sits:
    success is real, useful information, not hidden by an overall failed
    status.
 
-**Not yet built:** this fan-out logic — only `processing_jobs` (the table)
-and `GET /jobs/:jobId` (the read side) are implemented so far. Both
-lesson-level functions it will call now exist (`parseLessonSegments`,
-`generateLocalizationForLesson`). See `docs/decisions.md`.
+**Built for translation:** `POST /courses/:courseId/translations/:lang`
+(one job per language) — differs from the sketch above in two ways: lessons
+run one at a time (each already makes one DeepL request per segment;
+languages run as separate jobs in parallel), and progress also has
+`skipped` (not parsed / already translated). Startup marks jobs a restart
+interrupted as `failed`. **Not yet built:** course-level parse and generate
+jobs. Loading + parsing a whole course's scripts is a CLI for now
+(`npm run scripts:load -- <courseId> <folder> --parse`).
+
+## Outputs stage (local folder until Box is decided)
+
+After translation, `POST /courses/:courseId/outputs/segments` (or `npm run
+outputs:segments`) writes `<Language> Segments.txt` per lesson under
+`LOCAL_OUTPUT_ROOT/<courseFolder>/<Language>/<lessonId>/`. Audio will land
+beside it in `<Language> Clips/` through the same `ILessonOutputStore` —
+not wired yet (audio is on hold).
 
 ---
 

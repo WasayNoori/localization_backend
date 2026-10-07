@@ -7,7 +7,8 @@ import type { INlpService } from "../../interfaces/INlpService.js";
 
 export interface ParseLessonDeps {
   db: Database;
-  fileStorageService: IFileStorageService;
+  /** Only needed for lessons whose script lives in Box (box_file_id, no script_text). */
+  fileStorageService?: IFileStorageService;
   nlpService: INlpService;
 }
 
@@ -67,6 +68,7 @@ async function loadScriptText(
     return lesson.scriptText;
   }
   if (lesson.boxFileId) {
+    if (!deps.fileStorageService) throw new Error(`Lesson "${lesson.id}" reads its script from Box, but no file storage is configured`);
     const fileBuffer = await deps.fileStorageService.getFileContent(lesson.boxFileId);
     return fileBuffer.toString("utf-8");
   }

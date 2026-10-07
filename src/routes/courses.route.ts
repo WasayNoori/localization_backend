@@ -16,6 +16,9 @@ import {
   TranslateScaffoldingError,
   type ScaffoldingMode,
 } from "../services/translation/translateScaffolding.js";
+import { writeCourseSegmentsFiles, WriteSegmentsError } from "../services/output/writeCourseSegmentsFiles.js";
+import { startCourseTranslationJob, JobConflictError } from "../services/jobs/courseTranslationJob.js";
+import { TranslateCourseError, type CourseTranslationMode } from "../services/translation/translateCourseLessons.js";
 import { correctScaffolding, type ScaffoldingCorrections } from "../services/translation/correctScaffolding.js";
 import { updateCourseScripts, CourseScriptsError, type CourseScriptInput } from "../services/catalog/updateCourseScripts.js";
 
@@ -258,6 +261,98 @@ export async function coursesRoute(app: FastifyInstance) {
           return reply
             .code(err.statusCode)
             .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  app.post(
+    "/courses/:courseId/translations/:targetLanguage",
+    {
+      preValidation: defaultEmptyBody,
+      schema: {
+        description:
+          "Course-level translation job: translates every parsed lesson's segments into one language via the " +
+          "lesson translation (DeepL, glossary, full-lesson context), one lesson at a time in course order. " +
+          "Async — returns 202 { jobId } at once; poll GET /jobs/:jobId (progress: total, succeeded, failed, " +
+          "skipped). mode 'missing' (default) only translates segments with no translation yet, so re-running " +
+          "continues an interrupted job; 'all' re-translates everything. Never generates audio. 409 (with the " +
+          "running job) if this course + language already has an active job; 400 for 'en'; 404 unknown course.",
+        security: [{ apiKey: [] }],
+        params: {
+          type: "object",
+          required: ["courseId", "targetLanguage"],
+          properties: { courseId: { type: "string" }, targetLanguage: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: { mode: { type: "string", enum: ["missing", "all"] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
+      const { mode } = (request.body ?? {}) as { mode?: CourseTranslationMode };
+      try {
+        const job = await startCourseTranslationJob(
+          { db: app.db, translationService: app.translationService, translationReviewer: app.translationReviewer },
+          courseId,
+          targetLanguage,
+          mode ?? "missing"
+        );
+        return reply.code(202).send({ jobId: job.id, job });
+      } catch (err) {
+        if (err instanceof JobConflictError) {
+          return reply.code(409).send({ error: "Conflict", message: err.message, jobId: err.job.id, job: err.job });
+        }
+        if (err instanceof TranslateCourseError) {
+          return reply
+            .code(err.statusCode)
+            .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  app.post(
+    "/courses/:courseId/outputs/segments",
+    {
+      schema: {
+        description:
+          "Writes '<Language> Segments.txt' for every parsed lesson, per language, into the course folder " +
+          "under LOCAL_OUTPUT_ROOT: <courseFolder>/<Language>/<lessonId>/<Language> Segments.txt. 'en' = the " +
+          "English segments. Numbered 001, 002… (matches future clip names). A translated file is only " +
+          "written when every segment is translated — otherwise listed in skipped. courseFolder is relative " +
+          "(default: the course name). Overwrites existing files. 400 if LOCAL_OUTPUT_ROOT isn't set.",
+        security: [{ apiKey: [] }],
+        params: { type: "object", required: ["courseId"], properties: { courseId: { type: "string" } } },
+        body: {
+          type: "object",
+          required: ["languages"],
+          additionalProperties: false,
+          properties: {
+            languages: { type: "array", minItems: 1, items: { type: "string", minLength: 2 } },
+            courseFolder: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { courseId } = request.params as { courseId: string };
+      const { languages, courseFolder } = request.body as { languages: string[]; courseFolder?: string };
+      if (!app.lessonOutputStore) {
+        return reply.code(400).send({ error: "BadRequest", message: "LOCAL_OUTPUT_ROOT is not set — no output folder configured" });
+      }
+      try {
+        return reply.send(
+          await writeCourseSegmentsFiles({ db: app.db, outputStore: app.lessonOutputStore }, courseId, { languages, courseFolder })
+        );
+      } catch (err) {
+        if (err instanceof WriteSegmentsError) {
+          return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
         throw err;
       }
