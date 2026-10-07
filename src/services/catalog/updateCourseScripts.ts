@@ -7,8 +7,12 @@ export interface CourseScriptInput {
   lessonId: string;
   /** The script to parse (proofread, when the caller proofreads). */
   scriptText: string;
-  /** The text as it came in, when scriptText was proofread from it. Stored so a reload can tell the source is unchanged. */
-  sourceText?: string;
+  /**
+   * The text scriptText was proofread from (stored even when proofreading changed
+   * nothing), so a reload of the same source can skip proofreading. null = not
+   * proofread (clears it). Omit to leave it as stored.
+   */
+  sourceText?: string | null;
 }
 
 export interface UpdateCourseScriptsResult {
@@ -88,7 +92,7 @@ export async function updateCourseScripts(
 
       for (const { lessonId, scriptText, sourceText } of scripts) {
         const existing = byId.get(lessonId)!;
-        const scriptSourceText = sourceText !== undefined && sourceText !== scriptText ? sourceText : null;
+        const scriptSourceText = sourceText ?? null;
         if (existing.scriptText === scriptText) {
           // Same script — only record its source if that changed (no parse impact).
           if (sourceText !== undefined && existing.scriptSourceText !== scriptSourceText) {

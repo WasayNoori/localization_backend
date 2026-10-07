@@ -118,7 +118,7 @@ is an independent block, not owned by a single course — see
 | `lesson_name`   | text              |                                                                          |
 | `description`   | text, null        | Short learner-facing summary shown under the lesson title on the platform |
 | `script_text`   | text, null        | Full English script. Source of truth for parsing while the Box structure is undecided. Null until imported |
-| `script_source_text` | text, null      | The script as loaded (file text) when `script_text` was proofread from it (`scripts:load --proofread`). Null = `script_text` is the source as-is. Lets a reload of an unchanged file skip proofreading |
+| `script_source_text` | text, null      | The script as loaded (file text) that `script_text` was proofread from (`scripts:load --proofread`) — set even when proofreading changed nothing. Null = not proofread. Lets a reload of an unchanged file skip proofreading |
 | `script_updated_at` | timestamptz, null | Bumped only when `script_text` actually changes. `script_updated_at > parsed_at` means segments were cut from an older script (reported as `parseStale`) |
 | `tags`          | text[], default `{}` | Catalog tags from the course board ("Lesson Level Tags"). Not translated |
 | `box_file_id`   | text, null        | Box file ID of the English source script. Optional future pointer; parsing only falls back to it when `script_text` is null |

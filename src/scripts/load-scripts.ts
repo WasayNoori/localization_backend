@@ -71,7 +71,7 @@ runMain(async () => {
     const s = stored.get(lessonId);
     if (s?.source === text && s.scriptText) scripts.push({ lessonId, scriptText: s.scriptText, sourceText: text });
     else if (flag("proofread")) toProofread.push(lessonId);
-    else scripts.push({ lessonId, scriptText: text, sourceText: text });
+    else scripts.push({ lessonId, scriptText: text, sourceText: null });
   }
 
   if (toProofread.length) {
