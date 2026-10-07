@@ -44,6 +44,11 @@ export const lessons = pgTable("lessons", {
   // Full English script. Source of truth for parsing while the Box folder
   // structure is undecided — see docs/decisions.md ("Script text lives in the DB").
   scriptText: text("script_text"),
+  // The script exactly as loaded (file text), when script_text was proofread
+  // from it. Reloading the same source skips proofreading — keeps reloads
+  // idempotent (no re-parse from slightly different fixes). Null = script_text
+  // is the source as-is.
+  scriptSourceText: text("script_source_text"),
   // Bumped only when script_text actually changes. script_updated_at >
   // parsed_at means existing segments were cut from an older script.
   scriptUpdatedAt: timestamp("script_updated_at", { withTimezone: true }),

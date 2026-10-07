@@ -62,6 +62,11 @@ Fan-out + resume rule: `src/services/translation/translateCourseLessons.ts`.
 Job row, conflict check, restart recovery:
 `src/services/jobs/courseTranslationJob.ts`.
 
+## To change what the script proofreader fixes
+Prompt: `src/services/proofreading/ClaudeScriptProofreader.ts`. What gets
+applied automatically vs listed for review: `whyNotMechanical` in
+`src/services/proofreading/applyScriptCorrections.ts`.
+
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 

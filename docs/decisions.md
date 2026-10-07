@@ -507,6 +507,20 @@ not the layout or callers. Scripts are loaded from a folder of
 `<lessonId>.txt` files by a CLI (`scripts:load`), not an endpoint — files on
 the user's PC aren't reachable from a deployed server anyway.
 
+## Scripts are proofread before they're saved; only mechanical fixes are automatic
+Source typos (run-together sentences, missing words) carry into segments,
+every translation and the audio, and fixing them after parsing means
+re-parsing and re-translating. So `scripts:load --proofread` has Claude
+(`IScriptProofreader`) propose minimal fixes first. Whether a fix is applied
+is decided in code (`applyScriptCorrections`), not by the model's
+confidence: punctuation/spacing, ≤2-letter misspellings, inflections,
+merged words, up to two short inserted words, removing doubled words/phrases
+— and never a changed number. Everything else is listed for a person in
+`_proofread-report.md`. The source files are never edited. The DB keeps the
+loaded text in `lessons.script_source_text` so reloading an unchanged file
+reuses the stored fixes instead of proofreading again (a model re-run could
+produce slightly different fixes and force a re-parse).
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

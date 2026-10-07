@@ -7,3 +7,4 @@ export * from "./IFileStorageService.js";
 export * from "./IvoiceSettingsProvider.js";
 export * from "./ITranslationReviewer.js";
 export * from "./ILessonOutputStore.js";
+export * from "./IScriptProofreader.js";

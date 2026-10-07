@@ -1,0 +1,1 @@
+ALTER TABLE "lessons" ADD COLUMN "script_source_text" text;

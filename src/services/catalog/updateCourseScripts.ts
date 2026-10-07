@@ -5,7 +5,10 @@ import { courses, courseLessons, lessons } from "../../db/schema.js";
 
 export interface CourseScriptInput {
   lessonId: string;
+  /** The script to parse (proofread, when the caller proofreads). */
   scriptText: string;
+  /** The text as it came in, when scriptText was proofread from it. Stored so a reload can tell the source is unchanged. */
+  sourceText?: string;
 }
 
 export interface UpdateCourseScriptsResult {
@@ -83,15 +86,20 @@ export async function updateCourseScripts(
         needsReparse: [],
       };
 
-      for (const { lessonId, scriptText } of scripts) {
+      for (const { lessonId, scriptText, sourceText } of scripts) {
         const existing = byId.get(lessonId)!;
+        const scriptSourceText = sourceText !== undefined && sourceText !== scriptText ? sourceText : null;
         if (existing.scriptText === scriptText) {
+          // Same script — only record its source if that changed (no parse impact).
+          if (sourceText !== undefined && existing.scriptSourceText !== scriptSourceText) {
+            await tx.update(lessons).set({ scriptSourceText }).where(eq(lessons.id, lessonId));
+          }
           result.unchanged.push(lessonId);
           continue;
         }
         await tx
           .update(lessons)
-          .set({ scriptText, scriptUpdatedAt: now, updatedAt: now })
+          .set({ scriptText, ...(sourceText !== undefined ? { scriptSourceText } : {}), scriptUpdatedAt: now, updatedAt: now })
           .where(eq(lessons.id, lessonId));
         result.scriptsChanged.push(lessonId);
         if (existing.parsedAt) result.needsReparse.push(lessonId);

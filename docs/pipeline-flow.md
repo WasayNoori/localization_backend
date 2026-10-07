@@ -63,6 +63,11 @@ not wired yet (audio is on hold).
 
 ## Load + parse stage
 
+Scripts from files: `npm run scripts:load -- <courseId> <folder> --proofread
+[--dry-run] --parse`. Proofreading runs before anything is saved (see
+decisions.md, "Scripts are proofread…"); its report is
+`<folder>/_proofread-report.md`.
+
 1. `POST /courses/import` upserts course → sections → lessons, storing each
    lesson's full English script in `lessons.script_text` (no parsing).
 2. `POST /lessons/:lessonId/parse` reads `script_text` (Box via
