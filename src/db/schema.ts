@@ -388,7 +388,8 @@ export const ttsClips = pgTable(
     boxFileId: text("box_file_id"),
     boxFilePath: text("box_file_path"),
     // POC: where the clip was saved on disk while Box isn't set up
-    // (LocalFolderClipStore). A later Box upload fills box_file_id from it.
+    // (LocalFolderClipStore), relative to LOCAL_OUTPUT_ROOT with "/" separators.
+    // A later Box upload fills box_file_id from it.
     localPath: text("local_path"),
     // The previous_text / next_text actually sent to ElevenLabs for this clip
     // (null at a lesson boundary, or when the neighbor had no translation yet).

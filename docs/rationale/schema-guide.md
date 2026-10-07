@@ -395,7 +395,7 @@ One row per generated audio segment, in either English or a target language.
 | `audio_format`          | text           | e.g. `mp3_44100_192`                                                    |
 | `box_file_id`           | text, null     | Box file ID once uploaded                                              |
 | `box_file_path`         | text, null     | Human-readable path, for debugging without a Box API call             |
-| `local_path`            | text, null     | POC: where the clip was saved on disk (`LocalFolderClipStore`) while Box isn't set up; the Box backfill fills `box_file_id` from it |
+| `local_path`            | text, null     | POC: where the clip was saved on disk (`LocalFolderClipStore`), relative to `LOCAL_OUTPUT_ROOT` with `/` separators, while Box isn't set up; the Box backfill fills `box_file_id` from it |
 | `previous_text`         | text, null     | The `previous_text` actually sent to ElevenLabs (null at a lesson's first segment, or when the neighbor wasn't translated yet) |
 | `next_text`             | text, null     | Same for `next_text`                                                    |
 | `qc_status`             | text           | `pending` \| `pass` \| `warn` \| `fail` \| `manual_review` \| `superseded` |
