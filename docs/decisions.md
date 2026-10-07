@@ -521,6 +521,19 @@ loaded text in `lessons.script_source_text` so reloading an unchanged file
 reuses the stored fixes instead of proofreading again (a model re-run could
 produce slightly different fixes and force a re-parse).
 
+## No default voice; per-language voice settings edited in the UI
+Supersedes the "fall back to IVoiceSettingsProvider defaults" part of the
+voice-settings entries above. A hard-coded fallback voice meant a language
+nobody configured was silently voiced by an arbitrary voice — and that row
+was then persisted as if chosen. Now `IVoiceSettingsProvider` reads
+`language_voice_settings` (`DbVoiceSettingsProvider`) and throws
+`VoiceNotConfiguredError` for a missing language; generation answers 400.
+Only the non-voice parts (model, stability, similarity…) have starting
+defaults (`config/voice-defaults.ts`). The console's Settings page edits one
+row per language and previews it via `POST /tts/test`; voice and model
+choices come from the account (`GET /tts/options`). `voice_setting_templates`
+stays unused (candidate for removal).
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

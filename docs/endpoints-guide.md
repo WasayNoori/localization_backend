@@ -238,9 +238,20 @@ that language, not scoped to one lesson (see `docs/decisions.md`).
 Body: `{ voiceId?, modelId?, voiceSettings? }` — every field optional,
 including individual keys inside `voiceSettings` (e.g. `{ voiceSettings:
 { stability: 0.6 } }` only changes `stability`, leaves `style`/`speed`/etc.
-untouched). Anything omitted keeps its current value; if the language has
-no row yet, omitted fields fall back to `IVoiceSettingsProvider` defaults.
-Returns the resulting row.
+untouched). Anything omitted keeps its current value. Creating a language
+requires `voiceId` (400 otherwise — there is no default voice); `modelId`
+and `voiceSettings` then start from `config/voice-defaults.ts`
+(eleven_multilingual_v2, stability 0.5, similarity 0.75, style 0, speed 1).
+Ranges enforced: stability / similarityBoost / style 0–1, speed 0.7–1.2.
+Language code stored lowercase. Returns the resulting row. Edited in the
+console under **Settings**.
+
+`GET /languages/voice-settings` lists every configured language.
+`GET /tts/options` returns the ElevenLabs account's voices (`voiceId`,
+`name`, `category`, `labels`, `previewUrl`) and text-to-speech models
+(`modelId`, `name`, `languages`) for the Settings page (502 if ElevenLabs
+can't be reached). Generation (and `POST /tts/synthesize`, which now takes
+`language`, default `en`) answers 400 for a language with no voice.
 
 To actually regenerate a lesson with the new voice, call this first, then
 `POST /lessons/:lessonId/localizations/:targetLanguage/generate` with

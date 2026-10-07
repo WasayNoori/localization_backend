@@ -1,5 +1,6 @@
 // src/routes/lessons.route.ts
 import type { FastifyInstance } from "fastify";
+import { VoiceNotConfiguredError } from "../interfaces/IvoiceSettingsProvider.js";
 import { eq } from "drizzle-orm";
 import { lessons } from "../db/schema.js";
 import { generateLocalizationForLesson } from "../services/generation/generateLocalizationForLesson.js";
@@ -261,6 +262,9 @@ export async function lessonsRoute(app: FastifyInstance) {
 
         return reply.send(result);
       } catch (err) {
+        if (err instanceof VoiceNotConfiguredError) {
+          return reply.code(400).send({ error: "BadRequest", message: err.message });
+        }
         request.log.error(err, "Localization generation failed");
         return reply.code(500).send({
           error: "InternalError",

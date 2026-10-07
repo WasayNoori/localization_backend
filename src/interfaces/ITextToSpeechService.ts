@@ -26,6 +26,27 @@ export interface SynthesizeSpeechResult {
   contentType: string;
 }
 
+export interface TtsVoice {
+  voiceId: string;
+  name: string;
+  /** e.g. "premade", "cloned", "professional". */
+  category: string | null;
+  /** Free-form labels from the provider, e.g. { accent: "british", gender: "female" }. */
+  labels: Record<string, string>;
+  previewUrl: string | null;
+}
+
+export interface TtsModel {
+  modelId: string;
+  name: string;
+  /** Language codes the model supports, lowercase (e.g. "en", "fr"). */
+  languages: string[];
+}
+
 export interface ITextToSpeechService {
   synthesize(request: SynthesizeSpeechRequest): Promise<SynthesizeSpeechResult>;
+  /** Voices available to the account. */
+  listVoices(): Promise<TtsVoice[]>;
+  /** Text-to-speech models available to the account. */
+  listModels(): Promise<TtsModel[]>;
 }

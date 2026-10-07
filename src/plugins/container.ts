@@ -7,7 +7,7 @@ import { ElevenLabsTtsService } from "../services/tts/ElevenLabsTtsService.js";
 import type { IFileStorageService } from "../interfaces/IFileStorageService.js";
 import { BoxFileStorageService } from "../services/storage/BoxFileStorageService.js";
 import type { IVoiceSettingsProvider } from "../interfaces/IvoiceSettingsProvider.js";
-import { HardcodedVoiceSettingsProvider } from "../services/voiceSettings/HardcodedVoiceSettingsProvider.js";
+import { DbVoiceSettingsProvider } from "../services/voiceSettings/DbVoiceSettingsProvider.js";
 import type { ITranslationService } from "../interfaces/ITranslationService.js";
 import { DeepLTranslationService } from "../services/translation/DeepLTranslationService.js";
 import type { INlpService } from "../interfaces/INlpService.js";
@@ -68,7 +68,7 @@ export const container = fp(async (app: FastifyInstance) => {
   const fileStorageService = new BoxFileStorageService(secretsProvider);
   app.decorate("fileStorageService", fileStorageService);
 
-  const voiceSettingsProvider = new HardcodedVoiceSettingsProvider();
+  const voiceSettingsProvider = new DbVoiceSettingsProvider(db);
   app.decorate("voiceSettingsProvider", voiceSettingsProvider);
 
   const translationService = new DeepLTranslationService(secretsProvider);

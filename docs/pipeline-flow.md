@@ -123,9 +123,10 @@ called by the course-level fan-out above.
      DeepL. Not found → call DeepL, insert the row, use the result.
    - Resolve voice/model/settings from `language_voice_settings` for this
      target language — shared by every lesson in that language, not
-     per-lesson (see `docs/decisions.md`); created from
-     `IVoiceSettingsProvider` defaults on first use if it doesn't exist yet,
-     changed via `PUT /languages/:targetLanguage/voice-settings`, not
+     per-lesson (see `docs/decisions.md`), via `IVoiceSettingsProvider`
+     (`DbVoiceSettingsProvider`); a language with no row fails the call
+     (no default voice). Set in Settings / `PUT
+     /languages/:targetLanguage/voice-settings`, not
      anything passed to this function. Resolve the seed from the lesson's
      `lesson_localizations` row (also created for English now), created
      with a fixed default seed.

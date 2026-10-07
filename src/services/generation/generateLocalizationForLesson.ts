@@ -5,7 +5,6 @@ import {
   lessonSegments,
   segmentTranslations,
   lessonLocalizations,
-  languageVoiceSettings,
   ttsClips,
   type VoiceSettingsSnapshot,
 } from "../../db/schema.js";
@@ -135,8 +134,8 @@ export async function generateLocalizationForLesson(
   const segmentIndexById = new Map(segments.map((s, index) => [s.id, index]));
   const lessonContext = buildLessonContext(segments);
 
-  const voiceDefaults = await deps.voiceSettingsProvider.getSettings();
-  const voiceSettingsRow = await getOrCreateLanguageVoiceSettings(deps, targetLanguage, voiceDefaults);
+  // Throws VoiceNotConfiguredError for a language without a voice — never a silent default.
+  const voiceSettingsRow = await deps.voiceSettingsProvider.getSettings(targetLanguage);
   const lessonLocalization = await getOrCreateLessonLocalization(deps, lessonId, targetLanguage);
 
   const succeeded: string[] = [];
@@ -290,41 +289,6 @@ async function getOrCreateLessonLocalization(deps: GenerateLocalizationDeps, les
       ttsSeed: TTS_SEED,
       boxFolderId: deps.boxFolderId,
       status: "in_progress",
-    })
-    .returning();
-
-  return created;
-}
-
-// Voice config is per-language, shared by every lesson — see
-// docs/decisions.md. Bootstrapped from IVoiceSettingsProvider defaults the
-// first time a language is ever generated; every lesson after that reuses
-// the same row until PUT /languages/:targetLanguage/voice-settings changes
-// it (see language-voice-settings.route.ts).
-async function getOrCreateLanguageVoiceSettings(
-  deps: GenerateLocalizationDeps,
-  targetLanguage: string,
-  voiceDefaults: { voiceId: string; modelId: string; voiceSettings: VoiceSettingsSnapshot }
-) {
-  const { db } = deps;
-
-  const [existing] = await db
-    .select()
-    .from(languageVoiceSettings)
-    .where(eq(languageVoiceSettings.targetLanguage, targetLanguage))
-    .limit(1);
-
-  if (existing) {
-    return existing;
-  }
-
-  const [created] = await db
-    .insert(languageVoiceSettings)
-    .values({
-      targetLanguage,
-      voiceId: voiceDefaults.voiceId,
-      modelId: voiceDefaults.modelId,
-      voiceSettings: voiceDefaults.voiceSettings,
     })
     .returning();
 

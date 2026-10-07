@@ -67,6 +67,11 @@ Prompt: `src/services/proofreading/ClaudeScriptProofreader.ts`. What gets
 applied automatically vs listed for review: `whyNotMechanical` in
 `src/services/proofreading/applyScriptCorrections.ts`.
 
+## To change voice settings per language
+In the console: Settings. API: `PUT /languages/:lang/voice-settings`.
+Starting values for new languages: `src/config/voice-defaults.ts`. Allowed
+ranges: `language-voice-settings.route.ts`.
+
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)
 
