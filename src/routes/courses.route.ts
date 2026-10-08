@@ -395,7 +395,7 @@ export async function coursesRoute(app: FastifyInstance) {
         description:
           "Course-level audio job for one language ('en' included), into the course's Box folder: writes " +
           "'<Language> Segments.txt' per lesson (unchanged files skipped), then generates every missing clip " +
-          "with the language's voice settings — <Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3. " +
+          "with the language's voice settings — <LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3. " +
           "Lessons not fully translated are skipped (never calls DeepL). Async — 202 { jobId }; poll " +
           "GET /jobs/:jobId (progress: succeeded, failed, skipped, stats { segmentFiles, clips, characters }). " +
           "Re-running continues where it stopped. 400 no Box folder / no voice for the language, 404 unknown " +
@@ -444,7 +444,7 @@ export async function coursesRoute(app: FastifyInstance) {
       schema: {
         description:
           "Writes '<Language> Segments.txt' for every parsed lesson, per language, into the course folder " +
-          "under LOCAL_OUTPUT_ROOT: <courseFolder>/<Language>/<lessonId>/<Language> Segments.txt. 'en' = the " +
+          "under LOCAL_OUTPUT_ROOT: <courseFolder>/<LANG>/<lessonId>/<Language> Segments.txt. 'en' = the " +
           "English segments. Numbered 001, 002… (matches future clip names). A translated file is only " +
           "written when every segment is translated — otherwise listed in skipped. courseFolder is relative " +
           "(default: the course name). Overwrites existing files. 400 if LOCAL_OUTPUT_ROOT isn't set.",

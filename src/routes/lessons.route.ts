@@ -195,7 +195,7 @@ export async function lessonsRoute(app: FastifyInstance) {
           "lesson to already be parsed. To retranslate a single segment without paying for audio " +
           "regeneration, use POST /segments/:segmentId/translations/:targetLanguage/retranslate instead, " +
           "then call this with segmentId + force once satisfied. Clips go to the course's Box folder " +
-          "(<Language>/<lessonId>/<Language> Clips/); pass courseId when the lesson is in more than one course.",
+          "(<LANG>/<lessonId>/<Language> Clips/); pass courseId when the lesson is in more than one course.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",

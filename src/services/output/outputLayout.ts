@@ -18,20 +18,23 @@ export function courseFolderParts(courseFolder: string): string[] {
 /** Everything below the course folder — the same in the local folder and in Box. */
 export type LessonInCourse = Pick<LessonOutputTarget, "language" | "lessonId">;
 
-/** e.g. ["French", "25Sim01_01"] */
-export const lessonDirInCourse = (t: LessonInCourse): string[] => [languageName(t.language), t.lessonId];
+/** Language folder: the two-letter code, upper case ("FR"). Names inside stay full ("French Clips"). */
+export const languageFolder = (language: string): string => language.toUpperCase();
+
+/** e.g. ["FR", "25Sim01_01"] */
+export const lessonDirInCourse = (t: LessonInCourse): string[] => [languageFolder(t.language), t.lessonId];
 
 /** e.g. "French Segments.txt" — lives in the lesson folder. */
 export const segmentsFileName = (t: LessonInCourse): string => `${languageName(t.language)} Segments.txt`;
 
-/** e.g. ["French", "25Sim01_01", "French Clips"] */
+/** e.g. ["FR", "25Sim01_01", "French Clips"] */
 export const clipsDirInCourse = (t: LessonInCourse): string[] => [...lessonDirInCourse(t), `${languageName(t.language)} Clips`];
 
 /** e.g. "25Sim01_01_fr_001.mp3" — numbered like the segments file. */
 export const clipFileName = (t: LessonInCourse, segmentNumber: number): string =>
   `${t.lessonId}_${t.language}_${String(segmentNumber).padStart(3, "0")}.mp3`;
 
-/** e.g. ["SOLIDWORKS Simulation", "French", "25Sim01_01", "French Segments.txt"] */
+/** e.g. ["SOLIDWORKS Simulation", "FR", "25Sim01_01", "French Segments.txt"] */
 export const segmentsFilePath = (t: LessonOutputTarget): string[] => [
   ...courseFolderParts(t.courseFolder),
   ...lessonDirInCourse(t),

@@ -5,7 +5,7 @@ import { clipFileName, clipsDirInCourse } from "./outputLayout.js";
 
 /**
  * Saves clips to Box under the course's folder, in the same layout as the
- * local folder: <course folder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3.
+ * local folder: <course folder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3.
  * Folders are created as needed; a regenerated clip becomes a new version of
  * the same Box file. `destination.boxFolderId` is the course's top-level folder.
  */

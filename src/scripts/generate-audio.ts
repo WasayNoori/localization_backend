@@ -2,7 +2,7 @@
 //
 // POC (until the Box app is registered): generates missing audio for a
 // course and saves the clips locally, in the course folder layout:
-// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3
+// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3
 // tts_clips.local_path records each file; box_file_id is backfilled later.
 //
 //   npm run audio:generate -- 25Sim "SOLIDWORKS Simulation\SOLIDWORKS Simulation" fr es it

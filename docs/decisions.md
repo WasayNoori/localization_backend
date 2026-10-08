@@ -566,8 +566,8 @@ Supersedes "Generate's boxFolderId falls back to BOX_AUDIO_FOLDER_ID" and
 the flat `<requestId>.mp3` upload. Each course has a top-level Box folder
 (`courses.box_folder_id`, set on the course page or in the import JSON).
 Clips and Segments.txt go under it exactly as in the local folder:
-`<Language>/<lessonId>/<Language> Segments.txt` and
-`<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3` — one
+`<LANG>/<lessonId>/<Language> Segments.txt` and
+`<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3` — one
 layout definition (`outputLayout.ts`) serves both. Folders are found or
 created (children listed once and cached). A file whose name already exists
 is uploaded as a new version (same Box file id, history kept); identical
@@ -577,6 +577,14 @@ the app's service account, which must be an Editor on each course folder;
 a developer token remains as a testing fallback. Course-level audio is a
 processing job (`POST /courses/:id/localizations/:lang/generate`), started
 and watched from the course page.
+
+## Language folders are the two-letter code
+Output layout (local and Box): `<course>/<LANG>/<lessonId>/<Language> Segments.txt`
+and `<LANG>/<lessonId>/<Language> Clips/…` — e.g. `FR/25Sim01_01/French Clips/`.
+The language folder is the upper-case code to match the team's Box
+convention; file and Clips-folder names keep the full language name.
+Defined once in `outputLayout.languageFolder`. Clips generated locally before
+this (POC) keep their recorded `local_path` with the old "French/" folder.
 
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention

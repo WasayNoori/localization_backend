@@ -9,8 +9,8 @@ export interface LessonOutputTarget {
 
 /**
  * Where finished lesson outputs go, in the course folder layout:
- *   <courseFolder>/<Language>/<lessonId>/<Language> Segments.txt
- *   <courseFolder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_<NNN>.mp3
+ *   <courseFolder>/<LANG>/<lessonId>/<Language> Segments.txt
+ *   <courseFolder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_<NNN>.mp3
  * A local folder for now (LocalFolderLessonOutputStore); Box later, same layout.
  */
 export interface ILessonOutputStore {

@@ -27,7 +27,7 @@ export const courses = pgTable("courses", {
   status: text("status"),
   lcmsCourseId: text("lcms_course_id").unique(),
   // Top-level Box folder for this course's outputs. The pipeline creates
-  // <Language>/<lessonId>/<Language> Clips/ under it. Null = not set (audio
+  // <LANG>/<lessonId>/<Language> Clips/ under it. Null = not set (audio
   // can't go to Box for this course yet).
   boxFolderId: text("box_folder_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

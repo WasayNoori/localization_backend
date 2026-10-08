@@ -1,7 +1,7 @@
 // src/scripts/write-segments.ts
 //
 // Same as POST /courses/:courseId/outputs/segments: writes
-// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<Language>/<lessonId>/<Language> Segments.txt
+// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<LANG>/<lessonId>/<Language> Segments.txt
 //
 //   npm run outputs:segments -- 25Sim "SOLIDWORKS Simulation\SOLIDWORKS Simulation" en fr es it
 

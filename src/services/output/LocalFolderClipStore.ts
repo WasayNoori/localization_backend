@@ -5,10 +5,10 @@ import { clipFilePath } from "./outputLayout.js";
 
 /**
  * POC: saves clips into the local course folder layout
- * (<courseFolder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3)
+ * (<courseFolder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3)
  * until the Box app is registered. box_file_id stays null; local_path is
  * what a later Box upload backfills from — stored relative to the output
- * root ("SOLIDWORKS Simulation/French/25Sim01_01/French Clips/25Sim01_01_fr_001.mp3"),
+ * root ("SOLIDWORKS Simulation/FR/25Sim01_01/French Clips/25Sim01_01_fr_001.mp3"),
  * so it reads the same whichever machine or shell ran the generation.
  */
 export class LocalFolderClipStore implements IClipStore {

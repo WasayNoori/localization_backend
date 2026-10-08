@@ -55,7 +55,7 @@ jobs. Loading + parsing a whole course's scripts is a CLI for now
 
 After translation, `POST /courses/:courseId/outputs/segments` (or `npm run
 outputs:segments`) writes `<Language> Segments.txt` per lesson under
-`LOCAL_OUTPUT_ROOT/<courseFolder>/<Language>/<lessonId>/`. Audio lands
+`LOCAL_OUTPUT_ROOT/<courseFolder>/<LANG>/<lessonId>/`. Audio lands
 beside it in `<Language> Clips/` (POC, until Box is registered):
 
 ```
