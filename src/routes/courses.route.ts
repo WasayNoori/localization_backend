@@ -44,7 +44,6 @@ const lessonImportSchema = {
     id: { type: "string", minLength: 1 },
     lessonName: { type: "string", minLength: 1 },
     description: { type: "string" },
-    scriptText: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
   },
 } as const;
@@ -66,15 +65,13 @@ export async function coursesRoute(app: FastifyInstance) {
   app.post(
     "/courses/import",
     {
-      // Full scripts for a whole course can exceed Fastify's 1 MB default.
-      bodyLimit: 20 * 1024 * 1024,
       schema: {
         description:
-          "Idempotent upsert of a full course structure in one transaction: course → ordered sections → " +
-          "ordered lessons, with optional full English scriptText per lesson. The payload is the complete " +
+          "Idempotent upsert of a full course structure in one transaction: course details → ordered sections → " +
+          "ordered lessons (names, descriptions, tags). Structure and metadata only — scripts come through " +
+          "PUT /courses/:courseId/scripts (the console's script-file upload). The payload is the complete " +
           "desired structure — sections/memberships missing from it are removed from this course (lessons " +
-          "themselves are never deleted). Never parses: a changed script bumps script_updated_at and is " +
-          "reported in needsReparse if the lesson was already parsed. 400 on duplicate section indexes or " +
+          "themselves are never deleted). 400 on duplicate section indexes or " +
           "lesson ids. ?dryRun=true runs the same writes and rolls them back — a preview that returns the same " +
           "result shape (sectionsAdded/Removed, lessonsCreated/Updated/Unchanged/RemovedFromCourse, …) with " +
           "dryRun: true and nothing saved.",

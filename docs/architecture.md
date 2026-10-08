@@ -105,7 +105,8 @@ pipeline (full schema in `rationale/schema-guide.md`) — not placeholders.
 They're load-bearing and populated manually/internally — in bulk via
 `POST /courses/import`, which writes a whole course in one call: the
 course, its sections (`course_sections`), lesson placement
-(`course_lessons.section_id`/`position`) and each lesson's script text.
+(`course_lessons.section_id`/`position`); scripts follow through
+`PUT /courses/:courseId/scripts`.
 
 Once the separate LCMS system ships, these tables become local
 shadow/reference tables: `id` values will originate from LCMS (synced or

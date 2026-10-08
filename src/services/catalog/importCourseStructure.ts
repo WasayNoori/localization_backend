@@ -7,8 +7,6 @@ export interface ImportLessonInput {
   id: string;
   lessonName: string;
   description?: string;
-  /** Full English script. Omit to leave an existing script untouched. */
-  scriptText?: string;
   /** Catalog tags. Omit to leave existing tags untouched. */
   tags?: string[];
 }
@@ -50,10 +48,6 @@ export interface ImportCourseResult {
   lessonsUnchanged: string[];
   /** Were in this course, not in the payload — removed from the course (the lessons themselves are kept). */
   lessonsRemovedFromCourse: string[];
-  /** Lessons whose script_text was set or changed by this import. */
-  scriptsChanged: string[];
-  /** Subset of scriptsChanged that were already parsed — their segments are now stale. */
-  needsReparse: string[];
 }
 
 export class CourseImportValidationError extends Error {}
@@ -162,21 +156,16 @@ export async function importCourseStructure(
         lessonsUpdated: [],
         lessonsUnchanged: [],
         lessonsRemovedFromCourse: previousMembers.map((m) => m.lessonId).filter((id) => !payloadLessonIds.has(id)),
-        scriptsChanged: [],
-        needsReparse: [],
       };
 
       for (const lesson of allLessons) {
         const existing = existingById.get(lesson.id);
-        const scriptChanged = lesson.scriptText !== undefined && lesson.scriptText !== existing?.scriptText;
 
         if (!existing) {
           await tx.insert(lessons).values({
             id: lesson.id,
             lessonName: lesson.lessonName,
             description: lesson.description ?? null,
-            scriptText: lesson.scriptText ?? null,
-            scriptUpdatedAt: lesson.scriptText !== undefined ? now : null,
             tags: lesson.tags ?? [],
           });
           result.lessonsCreated.push(lesson.id);
@@ -187,23 +176,14 @@ export async function importCourseStructure(
               lessonName: lesson.lessonName,
               description: lesson.description ?? existing.description,
               ...(lesson.tags !== undefined ? { tags: lesson.tags } : {}),
-              ...(scriptChanged ? { scriptText: lesson.scriptText, scriptUpdatedAt: now } : {}),
               updatedAt: now,
             })
             .where(eq(lessons.id, lesson.id));
           const changed =
-            scriptChanged ||
             existing.lessonName !== lesson.lessonName ||
             (lesson.description !== undefined && lesson.description !== existing.description) ||
             (lesson.tags !== undefined && lesson.tags.join("\u0000") !== existing.tags.join("\u0000"));
           (changed ? result.lessonsUpdated : result.lessonsUnchanged).push(lesson.id);
-          if (scriptChanged && existing.parsedAt) {
-            result.needsReparse.push(lesson.id);
-          }
-        }
-
-        if (scriptChanged) {
-          result.scriptsChanged.push(lesson.id);
         }
       }
 

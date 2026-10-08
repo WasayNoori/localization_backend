@@ -83,7 +83,7 @@ Sync — loads or refreshes a whole course structure in one transaction.
 Logic in `importCourseStructure` (`src/services/catalog/
 importCourseStructure.ts`), DB only. Body:
 `{ id, courseName, description?, status?, sections: [{ sectionIndex, title,
-lessons: [{ id, lessonName, description?, scriptText?, tags? }] }] }` —
+lessons: [{ id, lessonName, description?, tags? }] }] }` —
 sections and lessons in display order (array position becomes
 `course_lessons.position`). Course `description`: omit to keep the stored
 one, `""` to clear it. The result also has `courseUpdated` (existing course
@@ -94,19 +94,18 @@ whose name, description or status changed).
   sections and memberships missing from it are removed from this course.
   Lessons are never deleted (they may belong to other courses and own
   segments/audio).
-- Omitting `scriptText` leaves an existing script untouched. A changed
-  script bumps `script_updated_at` only — never re-parses.
+- **Structure and metadata only — no script text.** Scripts come through
+  `PUT /courses/:courseId/scripts` (the console uploads one `.txt` per
+  lesson, named by lesson id). Existing scripts are never touched.
 - Returns `{ courseId, sectionCount, lessonCount, lessonsCreated,
-  lessonsUpdated, scriptsChanged, needsReparse }`. `needsReparse` = changed
-  scripts on already-parsed lessons; calling parse on those is the caller's
-  explicit choice, since re-parse wipes translations and audio.
+  lessonsUpdated }`.
 - `400` on duplicate `sectionIndex` or a lesson id repeated within the
-  course. Body limit raised to 20 MB for full-course scripts.
+  course.
 - `?dryRun=true` runs the same transaction and rolls it back — a preview
   that can't disagree with the real import. The result (both modes) also
   carries `dryRun`, `courseCreated`, `sectionsAdded`, `sectionsRemoved`,
   `lessonsUnchanged` and `lessonsRemovedFromCourse`; `lessonsUpdated` now
-  lists only lessons whose name, description or script actually changed.
+  lists only lessons whose name or description actually changed.
 
 ---
 
@@ -119,7 +118,10 @@ lessons already in the course, bumping `script_updated_at` only when the
 text actually changes. Structure and membership are untouched, so a partial
 list is safe — unlike `POST /courses/import`, whose payload is the full
 structure. All-or-nothing: `400` if a `lessonId` is duplicated or isn't in
-this course, `404` if the course doesn't exist. Never parses. Returns
+this course, `404` if the course doesn't exist. Never parses. A new script
+clears the typo-check marker (`script_source_text`), so the next Translate
+checks it again; re-uploading the original file of a script the typo check
+already fixed counts as unchanged (the fixes are kept). Returns
 `{ courseId, dryRun, scriptsChanged, unchanged, needsReparse }`;
 `?dryRun=true` previews without saving.
 
@@ -223,7 +225,7 @@ Box via `boxFileId` only when `script_text` is null), splits it via
 spaCy, and rewrites `lesson_segments` for the lesson inside one transaction
 (cascading to delete existing `segment_translations`/`tts_clips` — see
 `docs/decisions.md` on re-parse being destructive). Requires the lesson to
-have `script_text` (via `POST /courses/import`) or a `boxFileId`. Returns
+have `script_text` (via `PUT /courses/:courseId/scripts`) or a `boxFileId`. Returns
 `{ lessonId, segmentCount, parsedAt }`.
 
 ---

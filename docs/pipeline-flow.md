@@ -83,7 +83,8 @@ Scripts from files: `npm run scripts:load -- <courseId> <folder> --proofread
 decisions.md, "Scripts are proofread…"); its report is
 `<folder>/_proofread-report.md`.
 
-1. `POST /courses/import` upserts course → sections → lessons, storing each
+1. `POST /courses/import` upserts course → sections → lessons (names and
+   descriptions only); `PUT /courses/:courseId/scripts` then stores each
    lesson's full English script in `lessons.script_text` (no parsing).
 2. `POST /lessons/:lessonId/parse` reads `script_text` (Box via
    `box_file_id` only as a fallback), calls spaCy, and rewrites

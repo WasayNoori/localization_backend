@@ -614,3 +614,13 @@ stays its own job, run per language in parallel.
   a separate, manual action (mark the failed row `superseded`, then
   re-invoke) rather than something this function does on its own. Not yet
   validated against how the frontend actually wants failure retries to work.
+## Structure JSON carries no scripts; scripts are uploaded as files
+`POST /courses/import` is structure and metadata only (course details,
+sections, lesson names and descriptions); `scriptText` is no longer accepted.
+Scripts arrive through `PUT /courses/:courseId/scripts`, which the console
+fills from `.txt` files named by lesson id. Keeps the JSON small and
+hand-editable, and matches how scripts are written (one document per lesson).
+Supersedes the "(+ scripts)" part of "Course structure is imported in one call".
+A plain upload that changes a script clears `script_source_text`, so the next
+Translate typo-checks it again; re-uploading the pre-fix original of a script
+the typo check corrected is treated as unchanged, so the fixes aren't lost.

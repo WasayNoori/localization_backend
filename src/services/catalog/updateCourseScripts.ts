@@ -93,7 +93,9 @@ export async function updateCourseScripts(
       for (const { lessonId, scriptText, sourceText } of scripts) {
         const existing = byId.get(lessonId)!;
         const scriptSourceText = sourceText ?? null;
-        if (existing.scriptText === scriptText) {
+        // A plain upload of the file a stored script was typo-fixed from is the same script.
+        const sameAsProofreadSource = sourceText === undefined && existing.scriptSourceText === scriptText;
+        if (existing.scriptText === scriptText || sameAsProofreadSource) {
           // Same script — only record its source if that changed (no parse impact).
           if (sourceText !== undefined && existing.scriptSourceText !== scriptSourceText) {
             await tx.update(lessons).set({ scriptSourceText }).where(eq(lessons.id, lessonId));
@@ -103,7 +105,8 @@ export async function updateCourseScripts(
         }
         await tx
           .update(lessons)
-          .set({ scriptText, ...(sourceText !== undefined ? { scriptSourceText } : {}), scriptUpdatedAt: now, updatedAt: now })
+          // New text from a plain upload hasn't been typo-checked: clear the marker so Translate checks it.
+          .set({ scriptText, scriptSourceText, scriptUpdatedAt: now, updatedAt: now })
           .where(eq(lessons.id, lessonId));
         result.scriptsChanged.push(lessonId);
         if (existing.parsedAt) result.needsReparse.push(lessonId);
