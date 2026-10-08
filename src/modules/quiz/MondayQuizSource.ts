@@ -34,7 +34,7 @@ interface MondayItem {
 
 /**
  * Reads the course board's "Quiz Questions" group: one item per question,
- * item name = lesson id. Monday API token: secret "monday-api-token".
+ * item name = lesson id. Monday API token: secret "monday-api-key".
  */
 export class MondayQuizSource implements IQuizSource {
   constructor(private readonly secretsProvider: ISecretsProvider) {}
@@ -87,7 +87,7 @@ export class MondayQuizSource implements IQuizSource {
   }
 
   private async query<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-    const token = await this.secretsProvider.getSecret("monday-api-token");
+    const token = await this.secretsProvider.getSecret("monday-api-key");
     for (let attempt = 1; ; attempt++) {
       const response = await fetch(MONDAY_API_URL, {
         method: "POST",
