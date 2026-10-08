@@ -1,4 +1,5 @@
 // src/services/jobs/courseAudioJob.ts
+import { auditCourseAudio } from "../audit/auditCourseAudio.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { courses, processingJobs, type ProcessingJobProgress } from "../../db/schema.js";
 import type { IFileStorageService } from "../../interfaces/IFileStorageService.js";
@@ -124,8 +125,18 @@ async function runCourseAudioJob(deps: CourseAudioJobDeps, job: ProcessingJob, b
         await save("running");
       },
     });
-    // Same rule as translation jobs: any failed lesson → "failed"; succeeded still lists what was done.
-    await save(progress.failed.length ? "failed" : "completed");
+    // Audit: every lesson has a Box clip per segment, its Segments.txt, nothing out of place.
+    progress = { ...progress, phase: "auditing" };
+    await save("running");
+    try {
+      const { courseId: _c, language: _l, ...audit } = await auditCourseAudio(deps, job.targetId, language);
+      progress = { ...progress, audit };
+    } catch (err) {
+      progress = { ...progress, error: `Audit couldn't run: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    // Any failed lesson, a failed audit or an audit that couldn't run → "failed"; succeeded still lists what was done.
+    progress = { ...progress, phase: "done" };
+    await save(progress.failed.length || !progress.audit?.ok ? "failed" : "completed");
   } catch (err) {
     progress = { ...progress, error: err instanceof Error ? err.message : String(err) };
     await save("failed");

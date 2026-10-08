@@ -633,3 +633,13 @@ with a voice configured) starts English first. Keeps ElevenLabs within its
 concurrency limit and gives a usable language early instead of four partial
 ones. A queue-fed worker (see the scaling notes) would replace the in-process
 queue without changing this rule.
+
+## Course audio ends with a completeness audit
+Every course audio job finishes by auditing what it produced (auditCourseAudio),
+also callable any time (GET /courses/:courseId/localizations/:lang/audit):
+database and Box must agree — one Box-linked clip per segment, every lesson
+folder with its Segments.txt and exactly clips 001…N. A failed audit makes the
+job "failed" (never hide partial failure). Box is read fresh, not through the
+upload cache, so the audit sees what's really there. Numbering gaps and extra
+files are warnings only — gaps can be deliberate (a lesson dropped as a
+duplicate).

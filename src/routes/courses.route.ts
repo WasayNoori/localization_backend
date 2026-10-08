@@ -25,6 +25,7 @@ import {
 } from "../services/translation/translateScaffolding.js";
 import { writeCourseSegmentsFiles, WriteSegmentsError } from "../services/output/writeCourseSegmentsFiles.js";
 import { startCourseAudioJob, CourseAudioJobError } from "../services/jobs/courseAudioJob.js";
+import { auditCourseAudio, AuditError } from "../services/audit/auditCourseAudio.js";
 import { VoiceNotConfiguredError } from "../interfaces/IvoiceSettingsProvider.js";
 import { startCourseTranslationJob, JobConflictError } from "../services/jobs/courseTranslationJob.js";
 import { TranslateCourseError, type CourseTranslationMode } from "../services/translation/translateCourseLessons.js";
@@ -439,6 +440,37 @@ export async function coursesRoute(app: FastifyInstance) {
           return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
         if (err instanceof VoiceNotConfiguredError) return reply.code(400).send({ error: "BadRequest", message: err.message });
+        throw err;
+      }
+    }
+  );
+
+  app.get(
+    "/courses/:courseId/localizations/:targetLanguage/audit",
+    {
+      schema: {
+        description:
+          "Completeness audit of a course's audio in one language (also run at the end of every course audio job). " +
+          "Per lesson: one Box-linked clip per segment in the database, and in Box the lesson folder, " +
+          "'<Language> Segments.txt' and exactly clips 001…N, each the file the database points to. Warnings: gaps in " +
+          "lesson numbering, extra files, lesson folders not in the course. Reads Box fresh; changes nothing. " +
+          "Sync. 400 no Box folder, 404 unknown course.",
+        security: [{ apiKey: [] }],
+        params: {
+          type: "object",
+          required: ["courseId", "targetLanguage"],
+          properties: { courseId: { type: "string" }, targetLanguage: { type: "string" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
+      try {
+        return reply.send(await auditCourseAudio({ db: app.db, fileStorageService: app.fileStorageService }, courseId, targetLanguage.toLowerCase()));
+      } catch (err) {
+        if (err instanceof AuditError) {
+          return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
+        }
         throw err;
       }
     }

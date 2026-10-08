@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { BoxCcgAuth, BoxClient, BoxDeveloperTokenAuth, CcgConfig } from "box-typescript-sdk-gen";
 import { generateByteStreamFromBuffer, readByteStream } from "box-typescript-sdk-gen/internal";
-import type { IFileStorageService, SaveAudioResult, StorageAccount } from "../../interfaces/IFileStorageService.js";
+import type { IFileStorageService, SaveAudioResult, StorageAccount, StoredItem } from "../../interfaces/IFileStorageService.js";
 import type { ISecretsProvider } from "../../interfaces/ISecretsProvider.js";
 
 // BoxApiError isn't part of box-typescript-sdk-gen's public export surface
@@ -105,6 +105,20 @@ export class BoxFileStorageService implements IFileStorageService {
     const client = await this.getClient();
     const me = await client.users.getUserMe();
     return { id: me.id, name: me.name ?? "", login: me.login ?? "" };
+  }
+
+  async findFolderPath(rootFolderId: string, path: string[]): Promise<string | null> {
+    let id = rootFolderId;
+    for (const name of path) {
+      const found = (await this.listFolder(id)).get(name);
+      if (found?.type !== "folder") return null;
+      id = found.id;
+    }
+    return id;
+  }
+
+  async listItems(folderId: string): Promise<StoredItem[]> {
+    return [...(await this.listFolder(folderId))].map(([name, e]) => ({ id: e.id, name, type: e.type }));
   }
 
   private async ensureChildFolder(parentId: string, name: string): Promise<string> {

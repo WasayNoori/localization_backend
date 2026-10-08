@@ -220,6 +220,16 @@ export interface ProcessingJobProgress {
   review?: { lessonId: string; original: string; corrected: string; reason: string; why: string }[];
   /** Per-lesson remarks that aren't failures (e.g. fixes held back, scaffolding flags). */
   notes?: { lessonId: string; note: string }[];
+  /** Course audio jobs: the completeness audit run at the end (see auditCourseAudio). */
+  audit?: {
+    ok: boolean;
+    checkedAt: string;
+    lessons: number;
+    lessonsOk: number;
+    totals: { segments: number; clipsInDb: number; clipsInBox: number };
+    problems: { lessonId?: string; problem: string }[];
+    warnings: { lessonId?: string; warning: string }[];
+  };
 }
 
 // Tracks course-level async fan-out only. Lesson-level parse/generate stay
