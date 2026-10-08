@@ -16,6 +16,8 @@ import type { IAudioQcService } from "../interfaces/IAudioQcService.js";
 import { BasicAudioQcService } from "../services/qc/BasicAudioQcService.js";
 import type { ITranslationReviewer } from "../interfaces/ITranslationReviewer.js";
 import { ClaudeTranslationReviewer } from "../services/review/ClaudeTranslationReviewer.js";
+import type { IScriptProofreader } from "../interfaces/IScriptProofreader.js";
+import { ClaudeScriptProofreader } from "../services/proofreading/ClaudeScriptProofreader.js";
 import { createDbClient, type Database } from "../db/client.js";
 import { buildSecretsProvider } from "./secrets-provider.js";
 import { failInterruptedJobs } from "../services/jobs/courseTranslationJob.js";
@@ -43,6 +45,7 @@ declare module "fastify" {
     nlpService: INlpService;
     qcService: IAudioQcService;
     translationReviewer: ITranslationReviewer;
+    scriptProofreader: IScriptProofreader;
     /** Null when LOCAL_OUTPUT_ROOT isn't set. */
     lessonOutputStore: ILessonOutputStore | null;
     // decorate with concrete service implementations as they're built, ...
@@ -87,6 +90,7 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const translationReviewer = new ClaudeTranslationReviewer(secretsProvider, env.ANTHROPIC_REVIEW_MODEL);
   app.decorate("translationReviewer", translationReviewer);
+  app.decorate("scriptProofreader", new ClaudeScriptProofreader(secretsProvider, env.ANTHROPIC_REVIEW_MODEL));
 
   const lessonOutputStore = env.LOCAL_OUTPUT_ROOT ? new LocalFolderLessonOutputStore(env.LOCAL_OUTPUT_ROOT) : null;
   app.decorate("lessonOutputStore", lessonOutputStore);

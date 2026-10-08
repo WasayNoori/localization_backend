@@ -214,6 +214,12 @@ export interface ProcessingJobProgress {
   error?: string;
   /** Running totals, e.g. audio jobs: { segmentFiles, clips, characters }. */
   stats?: Record<string, number>;
+  /** What the job is doing now, e.g. "proofreading", "scaffolding", "translating". */
+  phase?: string;
+  /** Proposed script fixes a person should decide (typo check). */
+  review?: { lessonId: string; original: string; corrected: string; reason: string; why: string }[];
+  /** Per-lesson remarks that aren't failures (e.g. fixes held back, scaffolding flags). */
+  notes?: { lessonId: string; note: string }[];
 }
 
 // Tracks course-level async fan-out only. Lesson-level parse/generate stay

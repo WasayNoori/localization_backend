@@ -343,12 +343,15 @@ export async function coursesRoute(app: FastifyInstance) {
       preValidation: defaultEmptyBody,
       schema: {
         description:
-          "Course-level translation job: translates every parsed lesson's segments into one language via the " +
-          "lesson translation (DeepL, glossary, full-lesson context), one lesson at a time in course order. " +
-          "Async — returns 202 { jobId } at once; poll GET /jobs/:jobId (progress: total, succeeded, failed, " +
-          "skipped). mode 'missing' (default) only translates segments with no translation yet, so re-running " +
-          "continues an interrupted job; 'all' re-translates everything. Never generates audio. 409 (with the " +
-          "running job) if this course + language already has an active job; 400 for 'en'; 404 unknown course.",
+          "Course-level translation job for one language: (1) gets the scripts ready — with proofread: true, " +
+          "Claude typo-checks scripts not checked yet (mechanical fixes applied; the rest listed in " +
+          "progress.review; a lesson that already has translations or audio is never changed) — and parses " +
+          "lessons not parsed yet; (2) translates the scaffolding (course/section/lesson names, descriptions — " +
+          "missing or stale); (3) translates the scripts, lesson by lesson. Async — 202 { jobId }; poll " +
+          "GET /jobs/:jobId (progress: phase, total, succeeded, failed, skipped, stats, review, notes). Jobs of " +
+          "one course queue behind each other ('pending'). mode 'missing' (default) only fills what's missing, so " +
+          "re-running continues; 'all' re-translates every segment. Never generates audio. 409 (with the job) if " +
+          "this course + language already has an active job; 400 for 'en'; 404 unknown course.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",
@@ -358,19 +361,25 @@ export async function coursesRoute(app: FastifyInstance) {
         body: {
           type: "object",
           additionalProperties: false,
-          properties: { mode: { type: "string", enum: ["missing", "all"] } },
+          properties: { mode: { type: "string", enum: ["missing", "all"] }, proofread: { type: "boolean" } },
         },
       },
     },
     async (request, reply) => {
       const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
-      const { mode } = (request.body ?? {}) as { mode?: CourseTranslationMode };
+      const { mode, proofread } = (request.body ?? {}) as { mode?: CourseTranslationMode; proofread?: boolean };
       try {
         const job = await startCourseTranslationJob(
-          { db: app.db, translationService: app.translationService, translationReviewer: app.translationReviewer },
+          {
+            db: app.db,
+            translationService: app.translationService,
+            translationReviewer: app.translationReviewer,
+            nlpService: app.nlpService,
+            scriptProofreader: app.scriptProofreader,
+          },
           courseId,
           targetLanguage,
-          mode ?? "missing"
+          { mode: mode ?? "missing", proofread: !!proofread }
         );
         return reply.code(202).send({ jobId: job.id, job });
       } catch (err) {

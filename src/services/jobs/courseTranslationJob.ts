@@ -2,6 +2,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { processingJobs, type ProcessingJobProgress } from "../../db/schema.js";
+import type { INlpService } from "../../interfaces/INlpService.js";
+import type { IScriptProofreader } from "../../interfaces/IScriptProofreader.js";
+import { prepareCourseScripts } from "../translation/prepareCourseScripts.js";
 import {
   assertTranslatableCourse,
   courseLessonOrder,
@@ -9,8 +12,17 @@ import {
   type CourseTranslationMode,
 } from "../translation/translateCourseLessons.js";
 import type { TranslateLessonDeps } from "../translation/translateLessonSegments.js";
+import { translateCourseScaffolding } from "../translation/translateScaffolding.js";
 
 export type ProcessingJob = typeof processingJobs.$inferSelect;
+
+export type CourseTranslationJobDeps = TranslateLessonDeps & { nlpService: INlpService; scriptProofreader: IScriptProofreader };
+
+export interface CourseTranslationOptions {
+  mode?: CourseTranslationMode;
+  /** Typo-check scripts (Claude) before parsing — scripts not checked yet only. */
+  proofread?: boolean;
+}
 
 export class JobConflictError extends Error {
   constructor(public readonly job: ProcessingJob) {
@@ -19,17 +31,26 @@ export class JobConflictError extends Error {
 }
 
 /**
- * Starts "translate this course into one language" as a processing_jobs row
- * and runs it in the background in this process (no queue yet). Returns the
- * job immediately; poll GET /jobs/:jobId. One active job per course +
- * language. Progress is written after every lesson, so a poll always shows
- * real counts.
+ * Translation jobs of one course run one after another (in this process), so
+ * two languages never proofread or re-cut the same lesson at once. A job
+ * waiting its turn is "pending".
+ */
+const courseQueues = new Map<string, Promise<void>>();
+
+/**
+ * "Translate this course into one language" as a processing_jobs row, run in
+ * the background in this process. Returns at once; poll GET /jobs/:jobId.
+ * Steps: (1) get the scripts ready — typo check if asked, then parse what
+ * isn't parsed (shared by all languages; idempotent); (2) the scaffolding
+ * (course/section/lesson names, descriptions — missing or stale only);
+ * (3) the scripts. One active job per course + language; jobs of the same
+ * course queue behind each other.
  */
 export async function startCourseTranslationJob(
-  deps: TranslateLessonDeps,
+  deps: CourseTranslationJobDeps,
   courseId: string,
   targetLanguage: string,
-  mode: CourseTranslationMode = "missing"
+  options: CourseTranslationOptions = {}
 ): Promise<ProcessingJob> {
   const { db } = deps;
   await assertTranslatableCourse(db, courseId, targetLanguage);
@@ -57,33 +78,78 @@ export async function startCourseTranslationJob(
       targetId: courseId,
       type: "translate",
       targetLanguage,
-      status: "running",
-      progress: { total, succeeded: [], failed: [], skipped: [], options: { mode } },
+      status: "pending",
+      progress: {
+        total,
+        succeeded: [],
+        failed: [],
+        skipped: [],
+        phase: "queued",
+        options: { mode: options.mode ?? "missing", proofread: String(!!options.proofread) },
+      },
     })
     .returning();
 
-  void runCourseTranslationJob(deps, job).catch(() => {
-    // runCourseTranslationJob records its own failure; nothing else to do here.
+  const previous = courseQueues.get(courseId) ?? Promise.resolve();
+  const mine = previous.then(() => runCourseTranslationJob(deps, job)).catch(() => {
+    // runCourseTranslationJob records its own failure.
+  });
+  courseQueues.set(courseId, mine);
+  void mine.finally(() => {
+    if (courseQueues.get(courseId) === mine) courseQueues.delete(courseId);
   });
   return job;
 }
 
-async function runCourseTranslationJob(deps: TranslateLessonDeps, job: ProcessingJob): Promise<void> {
+async function runCourseTranslationJob(deps: CourseTranslationJobDeps, job: ProcessingJob): Promise<void> {
   const { db } = deps;
+  const language = job.targetLanguage!;
   const mode = (job.progress.options?.mode as CourseTranslationMode | undefined) ?? "missing";
-  const save = async (progress: ProcessingJobProgress, status: string): Promise<void> => {
-    await db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
-  };
+  const proofread = job.progress.options?.proofread === "true";
+  let progress: ProcessingJobProgress = { ...job.progress, notes: [], review: [] };
+  const save = (status: string) =>
+    db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
+
   try {
-    const result = await translateCourseLessons(deps, job.targetId, job.targetLanguage!, {
+    // 1. Scripts ready: typo check (optional) + parse what isn't parsed.
+    progress = { ...progress, phase: proofread ? "checking scripts" : "preparing scripts" };
+    await save("running");
+    const prep = await prepareCourseScripts(deps, job.targetId, { proofread });
+    progress = {
+      ...progress,
+      stats: { proofread: prep.proofread, fixesApplied: prep.fixesApplied, parsed: prep.parsed },
+      review: prep.review,
+      notes: prep.issues.map((i) => ({ lessonId: i.lessonId, note: i.issue })),
+    };
+
+    // 2. Scaffolding — names and descriptions (missing or stale only).
+    progress = { ...progress, phase: "translating names and descriptions" };
+    await save("running");
+    try {
+      const sc = await translateCourseScaffolding(deps, job.targetId, language, "missing");
+      if (sc.review.flagged) progress.notes!.push({ lessonId: "", note: `${sc.review.flagged} name/description translation(s) flagged by the reviewer — see the course page` });
+      if (sc.review.error) progress.notes!.push({ lessonId: "", note: `scaffolding review failed (translations saved, unreviewed): ${sc.review.error}` });
+    } catch (err) {
+      progress.notes!.push({ lessonId: "", note: `names and descriptions not translated: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // 3. Scripts.
+    progress = { ...progress, phase: "translating scripts" };
+    await save("running");
+    const result = await translateCourseLessons(deps, job.targetId, language, {
       mode,
-      onProgress: (p) => save({ ...p, options: job.progress.options }, "running"),
+      onProgress: async (p) => {
+        progress = { ...progress, succeeded: p.succeeded, failed: p.failed, skipped: p.skipped };
+        await save("running");
+      },
     });
-    const { stopped: _stopped, ...progress } = result;
+    const { stopped: _stopped, ...lessonsProgress } = result;
+    progress = { ...progress, ...lessonsProgress, phase: "done" };
     // Settled rule (pipeline-flow.md): any failed lesson → "failed"; succeeded still lists what was done.
-    await save({ ...progress, options: job.progress.options }, progress.failed.length ? "failed" : "completed");
+    await save(progress.failed.length ? "failed" : "completed");
   } catch (err) {
-    await save({ ...job.progress, error: err instanceof Error ? err.message : String(err) }, "failed");
+    progress = { ...progress, error: err instanceof Error ? err.message : String(err) };
+    await save("failed");
     throw err;
   }
 }

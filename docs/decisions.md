@@ -586,6 +586,19 @@ convention; file and Clips-folder names keep the full language name.
 Defined once in `outputLayout.languageFolder`. Clips generated locally before
 this (POC) keep their recorded `local_path` with the old "French/" folder.
 
+## One "Translate" per language: typo check → parse → names → scripts
+The course page's Translate (POST /courses/:id/translations/:lang) is the whole
+text side for a language. It first gets the scripts ready — optional Claude
+typo check of scripts not checked yet (mechanical fixes applied, the rest
+listed in progress.review), then parsing of lessons not parsed — then the
+scaffolding (missing/stale), then the scripts. Getting scripts ready is shared
+by every language and idempotent; a script is never changed for a lesson that
+already has translations or audio in any language (its fixes are noted
+instead), because a changed script means re-cutting segments, which deletes
+them. Translation jobs of one course run one after another (in-process queue,
+"pending" while waiting) so two languages never re-cut the same lesson. Audio
+stays its own job, run per language in parallel.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

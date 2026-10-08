@@ -180,3 +180,12 @@ generate loop uses for a never-yet-translated segment), but never touches
 `tts_clips`. Audio regeneration from the corrected translation is a
 separate, explicit call back into the generate loop above (`segmentId` +
 `force: true`) — see `docs/decisions.md`.
+## Course translation job (the console's "Translate")
+`POST /courses/:courseId/translations/:lang` `{ proofread?, mode? }` → job:
+1. `prepareCourseScripts` — typo check (if `proofread`) of scripts never
+   checked (`script_source_text` null), then parse lessons not parsed (or
+   whose script changed and that have nothing to lose). Shared by all languages.
+2. `translateCourseScaffolding(missing)` — course name, section titles, lesson
+   names/descriptions; Claude flags show on the course page.
+3. `translateCourseLessons(mode)` — the scripts.
+Jobs of one course queue (status `pending`) behind each other.
