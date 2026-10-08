@@ -513,7 +513,7 @@ persisted pipeline path.
 - `boxFolderId` (numeric) is the course's top-level Box folder; also accepted by `POST /courses/import` (omit = unchanged) and returned by `GET /courses/:courseId`.
 
 ### Course audio job
-- `POST /courses/:courseId/localizations/:targetLanguage/generate` → `202 { jobId, job }`. For one language (`en` too), into the course's Box folder: writes `<Language> Segments.txt` per lesson (unchanged files skipped), then every missing clip (`<LANG>/<lessonId>/<Language> Clips/…`). Lessons not fully translated are skipped (no DeepL). Re-running continues. Progress: `succeeded`, `failed`, `skipped`, `stats { segmentFiles, clips, characters }`. 400 no Box folder / no voice, 404, 409 active job.
+- `POST /courses/:courseId/localizations/:targetLanguage/generate` → `202 { jobId, job }`. For one language (`en` too), into the course's Box folder: writes `<Language> Segments.txt` per lesson (unchanged files skipped), then every missing clip (`<LANG>/<lessonId>/<Language> Clips/…`). Lessons not fully translated are skipped (no DeepL). Re-running continues. Progress: `succeeded`, `failed`, `skipped`, `stats { segmentFiles, clips, characters }`. 400 no Box folder / no voice, 404, 409 active job. Audio jobs of one course run one after another in the order started (`pending` with phase `queued` while waiting); the console's "All languages" starts English first, then each target with a voice.
 - `GET /courses/:courseId/jobs` — the course's latest 20 jobs (translate + generate), newest first, so a page can resume polling.
 
 ### Box status

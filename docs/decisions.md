@@ -624,3 +624,12 @@ Supersedes the "(+ scripts)" part of "Course structure is imported in one call".
 A plain upload that changes a script clears `script_source_text`, so the next
 Translate typo-checks it again; re-uploading the pre-fix original of a script
 the typo check corrected is treated as unchanged, so the fixes aren't lost.
+
+## Course audio: one language at a time, English first
+Audio jobs of one course queue behind each other (in-process, like translation
+jobs) instead of running side by side. Each language does the whole course
+before the next starts; the console's "All languages" (English + every target
+with a voice configured) starts English first. Keeps ElevenLabs within its
+concurrency limit and gives a usable language early instead of four partial
+ones. A queue-fed worker (see the scaling notes) would replace the in-process
+queue without changing this rule.

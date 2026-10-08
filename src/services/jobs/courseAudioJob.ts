@@ -33,6 +33,14 @@ export class CourseAudioJobError extends Error {
  * Lessons not fully translated are skipped (no DeepL calls). One active job
  * per course + language.
  */
+/**
+ * Audio jobs of one course run one after another, in the order requested
+ * (the console starts English first, then each target). One language finishes
+ * the whole course before the next starts; a job waiting its turn is "pending".
+ * In-process, like the translation queue — a separate worker replaces both.
+ */
+const courseAudioQueues = new Map<string, Promise<void>>();
+
 export async function startCourseAudioJob(deps: CourseAudioJobDeps, courseId: string, language: string): Promise<ProcessingJob> {
   const { db } = deps;
   const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
@@ -64,13 +72,19 @@ export async function startCourseAudioJob(deps: CourseAudioJobDeps, courseId: st
       targetId: courseId,
       type: "generate",
       targetLanguage: language,
-      status: "running",
-      progress: { total, succeeded: [], failed: [], skipped: [], options: { boxFolderId: course.boxFolderId } },
+      status: "pending",
+      progress: { total, succeeded: [], failed: [], skipped: [], phase: "queued", options: { boxFolderId: course.boxFolderId } },
     })
     .returning();
 
-  void runCourseAudioJob(deps, job, course.boxFolderId).catch(() => {
+  const boxFolderId = course.boxFolderId;
+  const previous = courseAudioQueues.get(courseId) ?? Promise.resolve();
+  const mine = previous.then(() => runCourseAudioJob(deps, job, boxFolderId)).catch(() => {
     // runCourseAudioJob records its own failure.
+  });
+  courseAudioQueues.set(courseId, mine);
+  void mine.finally(() => {
+    if (courseAudioQueues.get(courseId) === mine) courseAudioQueues.delete(courseId);
   });
   return job;
 }
@@ -78,11 +92,12 @@ export async function startCourseAudioJob(deps: CourseAudioJobDeps, courseId: st
 async function runCourseAudioJob(deps: CourseAudioJobDeps, job: ProcessingJob, boxFolderId: string): Promise<void> {
   const { db } = deps;
   const language = job.targetLanguage!;
-  let progress: ProcessingJobProgress = { ...job.progress, stats: { segmentFiles: 0, clips: 0, characters: 0 } };
+  let progress: ProcessingJobProgress = { ...job.progress, phase: "generating", stats: { segmentFiles: 0, clips: 0, characters: 0 } };
   const save = (status: string) =>
     db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
 
   try {
+    await save("running");
     const segments = await writeCourseSegmentsFiles(
       { db, outputStore: new BoxLessonOutputStore(deps.fileStorageService, boxFolderId) },
       job.targetId,
