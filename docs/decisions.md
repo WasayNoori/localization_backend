@@ -561,6 +561,23 @@ translation's "missing" mode, so changing a language's formality is a
 resumable re-translation. Scaffolding (titles/descriptions) isn't re-run
 automatically.
 
+## Audio to Box: the course folder, same layout as the local folder
+Supersedes "Generate's boxFolderId falls back to BOX_AUDIO_FOLDER_ID" and
+the flat `<requestId>.mp3` upload. Each course has a top-level Box folder
+(`courses.box_folder_id`, set on the course page or in the import JSON).
+Clips and Segments.txt go under it exactly as in the local folder:
+`<Language>/<lessonId>/<Language> Segments.txt` and
+`<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3` — one
+layout definition (`outputLayout.ts`) serves both. Folders are found or
+created (children listed once and cached). A file whose name already exists
+is uploaded as a new version (same Box file id, history kept); identical
+content (SHA-1) isn't re-uploaded. Box sign-in is the Box app's
+client-credentials login (box-client-id/-secret/-enterprise-id), acting as
+the app's service account, which must be an Editor on each course folder;
+a developer token remains as a testing fallback. Course-level audio is a
+processing job (`POST /courses/:id/localizations/:lang/generate`), started
+and watched from the course page.
+
 ## Open questions (not yet settled)
 - Do failed/superseded `tts_clips` attempts get deleted after a retention
   window, or kept indefinitely for audit?

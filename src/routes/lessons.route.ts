@@ -1,4 +1,5 @@
 // src/routes/lessons.route.ts
+import { courseBoxFolderForLesson, LessonCourseError } from "../services/catalog/courseBoxFolderForLesson.js";
 import type { FastifyInstance } from "fastify";
 import { VoiceNotConfiguredError } from "../interfaces/IvoiceSettingsProvider.js";
 import { eq } from "drizzle-orm";
@@ -7,7 +8,6 @@ import { generateLocalizationForLesson } from "../services/generation/generateLo
 import { parseLessonSegments } from "../services/parsing/parseLessonSegments.js";
 import { translateLessonSegments, TranslateLessonError } from "../services/translation/translateLessonSegments.js";
 import { getLessonLocalization } from "../services/catalog/getLessonLocalization.js";
-import { env } from "../config/env.js";
 import { defaultEmptyBody } from "./default-empty-body.js";
 
 export async function lessonsRoute(app: FastifyInstance) {
@@ -194,7 +194,8 @@ export async function lessonsRoute(app: FastifyInstance) {
           "aborting the rest, and re-calling this picks up exactly what's still missing. Requires the " +
           "lesson to already be parsed. To retranslate a single segment without paying for audio " +
           "regeneration, use POST /segments/:segmentId/translations/:targetLanguage/retranslate instead, " +
-          "then call this with segmentId + force once satisfied. boxFolderId is optional when BOX_AUDIO_FOLDER_ID is set.",
+          "then call this with segmentId + force once satisfied. Clips go to the course's Box folder " +
+          "(<Language>/<lessonId>/<Language> Clips/); pass courseId when the lesson is in more than one course.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",
@@ -207,9 +208,8 @@ export async function lessonsRoute(app: FastifyInstance) {
         body: {
           type: "object",
           properties: {
-            // Optional: falls back to BOX_AUDIO_FOLDER_ID (env). Only used the
-            // first time a lesson+language localization is created.
-            boxFolderId: { type: "string" },
+            // Which course's Box folder — only needed when the lesson is in several courses.
+            courseId: { type: "string" },
             // Optional: restrict this call to one segment, for manual
             // single-segment regeneration/debugging rather than the normal
             // find-what's-missing sweep over the whole lesson.
@@ -230,18 +230,19 @@ export async function lessonsRoute(app: FastifyInstance) {
         lessonId: string;
         targetLanguage: string;
       };
-      const { boxFolderId: requestedFolderId, segmentId, verifyBoxFiles, force } = (request.body ?? {}) as {
-        boxFolderId?: string;
+      const { courseId, segmentId, verifyBoxFiles, force } = (request.body ?? {}) as {
+        courseId?: string;
         segmentId?: string;
         verifyBoxFiles?: boolean;
         force?: boolean;
       };
 
-      const boxFolderId = requestedFolderId ?? env.BOX_AUDIO_FOLDER_ID;
-      if (!boxFolderId) {
-        return reply
-          .code(400)
-          .send({ error: "BadRequest", message: "boxFolderId is required (no BOX_AUDIO_FOLDER_ID configured)" });
+      let boxFolderId: string;
+      try {
+        ({ boxFolderId } = await courseBoxFolderForLesson(app.db, lessonId, courseId));
+      } catch (err) {
+        if (err instanceof LessonCourseError) return reply.code(400).send({ error: "BadRequest", message: err.message });
+        throw err;
       }
 
       try {

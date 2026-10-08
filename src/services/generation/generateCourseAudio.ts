@@ -12,7 +12,7 @@ export interface CourseAudioOptions {
   /** Count what's missing (segments + characters) without calling ElevenLabs. */
   estimateOnly?: boolean;
   shouldStop?: () => boolean;
-  onLesson?: (lesson: CourseAudioLessonResult, done: number, total: number) => void;
+  onLesson?: (lesson: CourseAudioLessonResult, done: number, total: number) => void | Promise<void>;
 }
 
 export interface CourseAudioLessonResult {
@@ -67,7 +67,7 @@ export async function generateCourseAudio(
     const lesson = await generateLessonAudio(deps, lessonId, language, options);
     if (lesson.stopped) result.stopped = true;
     result.lessons.push(lesson.result);
-    options.onLesson?.(lesson.result, result.lessons.length, lessonIds.length);
+    await options.onLesson?.(lesson.result, result.lessons.length, lessonIds.length);
     if (result.stopped) break;
   }
   return result;

@@ -24,6 +24,8 @@ import {
   type ScaffoldingMode,
 } from "../services/translation/translateScaffolding.js";
 import { writeCourseSegmentsFiles, WriteSegmentsError } from "../services/output/writeCourseSegmentsFiles.js";
+import { startCourseAudioJob, CourseAudioJobError } from "../services/jobs/courseAudioJob.js";
+import { VoiceNotConfiguredError } from "../interfaces/IvoiceSettingsProvider.js";
 import { startCourseTranslationJob, JobConflictError } from "../services/jobs/courseTranslationJob.js";
 import { TranslateCourseError, type CourseTranslationMode } from "../services/translation/translateCourseLessons.js";
 import { correctScaffolding, type ScaffoldingCorrections } from "../services/translation/correctScaffolding.js";
@@ -380,6 +382,57 @@ export async function coursesRoute(app: FastifyInstance) {
             .code(err.statusCode)
             .send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
+        throw err;
+      }
+    }
+  );
+
+  app.post(
+    "/courses/:courseId/localizations/:targetLanguage/generate",
+    {
+      preValidation: defaultEmptyBody,
+      schema: {
+        description:
+          "Course-level audio job for one language ('en' included), into the course's Box folder: writes " +
+          "'<Language> Segments.txt' per lesson (unchanged files skipped), then generates every missing clip " +
+          "with the language's voice settings — <Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3. " +
+          "Lessons not fully translated are skipped (never calls DeepL). Async — 202 { jobId }; poll " +
+          "GET /jobs/:jobId (progress: succeeded, failed, skipped, stats { segmentFiles, clips, characters }). " +
+          "Re-running continues where it stopped. 400 no Box folder / no voice for the language, 404 unknown " +
+          "course, 409 (with the running job) if this course + language already has an active job.",
+        security: [{ apiKey: [] }],
+        params: {
+          type: "object",
+          required: ["courseId", "targetLanguage"],
+          properties: { courseId: { type: "string" }, targetLanguage: { type: "string" } },
+        },
+        body: { type: "object", additionalProperties: false, properties: {} },
+      },
+    },
+    async (request, reply) => {
+      const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
+      try {
+        const job = await startCourseAudioJob(
+          {
+            db: app.db,
+            translationService: app.translationService,
+            ttsService: app.ttsService,
+            qcService: app.qcService,
+            fileStorageService: app.fileStorageService,
+            voiceSettingsProvider: app.voiceSettingsProvider,
+          },
+          courseId,
+          targetLanguage.toLowerCase()
+        );
+        return reply.code(202).send({ jobId: job.id, job });
+      } catch (err) {
+        if (err instanceof JobConflictError) {
+          return reply.code(409).send({ error: "Conflict", message: err.message, jobId: err.job.id, job: err.job });
+        }
+        if (err instanceof CourseAudioJobError) {
+          return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
+        }
+        if (err instanceof VoiceNotConfiguredError) return reply.code(400).send({ error: "BadRequest", message: err.message });
         throw err;
       }
     }

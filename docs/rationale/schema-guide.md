@@ -508,3 +508,8 @@ Top-level Box folder per course (numeric id, nullable). Audio and Segments.txt
 go under it as `<Language>/<lessonId>/<Language> Clips/` — the same layout as
 the local output folder. Set on the course page, via `PATCH /courses/:id`, or
 in the import JSON.
+
+`lesson_localizations.box_folder_id` now snapshots the **course's** top-level
+Box folder (not a clips folder); the course's current folder takes priority.
+`processing_jobs.progress.stats` holds running totals for audio jobs
+(`segmentFiles`, `clips`, `characters`).

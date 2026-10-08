@@ -62,6 +62,11 @@ beside it in `<Language> Clips/` (POC, until Box is registered):
 npm run audio:generate -- <courseId> "<courseFolder>" fr es it [--lessons a,b] [--estimate] [--max-seconds N]
 ```
 
+**Box (the normal path):** the course page's "Generate audio" (or `POST
+/courses/:courseId/localizations/:lang/generate`) runs the same thing as a
+job into the course's Box folder: Segments.txt for every lesson first, then
+the missing clips, with `BoxClipStore`. The CLI below remains for local runs.
+
 `generateCourseAudio` calls the lesson-level generate loop below for each
 lesson (languages in parallel, lessons one at a time) with a
 `LocalFolderClipStore`; `tts_clips.local_path` records each file and

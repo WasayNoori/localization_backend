@@ -212,6 +212,8 @@ export interface ProcessingJobProgress {
   options?: Record<string, string>;
   /** Why the job as a whole failed (crash, server restart) — per-lesson errors are in `failed`. */
   error?: string;
+  /** Running totals, e.g. audio jobs: { segmentFiles, clips, characters }. */
+  stats?: Record<string, number>;
 }
 
 // Tracks course-level async fan-out only. Lesson-level parse/generate stay

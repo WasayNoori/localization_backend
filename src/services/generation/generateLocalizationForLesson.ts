@@ -35,10 +35,9 @@ export interface GenerateLocalizationDeps {
   /** Where clips are saved: Box normally, a local folder for the POC (see IClipStore). */
   clipStore: IClipStore;
   /**
-   * Box folder to upload generated clips into. Snapshotted onto the
-   * lesson_localizations row the first time it's created for this
-   * lesson+language, then reused from there on subsequent calls. Null when
-   * clips go to a local folder (filled in later by the Box backfill).
+   * The course's top-level Box folder (clips go under it in the course
+   * layout). Snapshotted onto the lesson_localizations row when it's first
+   * created. Null when clips go to a local folder.
    */
   boxFolderId: string | null;
   /** Course folder for a local clip store, relative to its root. Null for Box. */
@@ -201,7 +200,8 @@ export async function generateLocalizationForLesson(
           language: targetLanguage,
           segmentNumber: segmentIndex + 1,
           requestId: synthesized.requestId,
-          boxFolderId: lessonLocalization.boxFolderId ?? deps.boxFolderId,
+          // The course's Box folder is the source of truth; the lesson row's snapshot is a fallback.
+          boxFolderId: deps.boxFolderId ?? lessonLocalization.boxFolderId,
           courseFolder: deps.courseFolder ?? null,
         },
         synthesized.audio

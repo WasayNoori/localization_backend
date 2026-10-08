@@ -67,6 +67,11 @@ Prompt: `src/services/proofreading/ClaudeScriptProofreader.ts`. What gets
 applied automatically vs listed for review: `whyNotMechanical` in
 `src/services/proofreading/applyScriptCorrections.ts`.
 
+## To change the Box folder layout or file names
+`services/output/outputLayout.ts` — `lessonDirInCourse`, `clipsDirInCourse`,
+`clipFileName`, `segmentsFileName` are shared by the local folder and Box.
+Box find-or-create and new-version uploads: `services/storage/BoxFileStorageService.ts`.
+
 ## To change where generated clips are saved
 `IClipStore` — `BoxClipStore` (the generate endpoint, wired in `plugins/container.ts`)
 or `LocalFolderClipStore` (`npm run audio:generate`, the local POC). File names

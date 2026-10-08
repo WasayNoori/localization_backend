@@ -354,9 +354,11 @@ consistent while each translation still maps 1:1 to its segment.
 
 ## `POST /lessons/:lessonId/localizations/:targetLanguage/generate`
 
-`boxFolderId` is optional: when omitted, falls back to the
-`BOX_AUDIO_FOLDER_ID` env var (400 if neither is set). Only used the first
-time a lesson+language localization is created.
+Clips go to the course's Box folder (`courses.box_folder_id`) in the course
+layout: `<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3`.
+Body `courseId` picks the course when the lesson is in more than one; 400 if
+the lesson's course has no Box folder. (Replaces the old `boxFolderId` /
+`BOX_AUDIO_FOLDER_ID` flat-folder upload.)
 
 Sync — lesson-level scope, per the settled sync/async split (only
 course-level scope is job-tracked). Thin route; all logic lives in
@@ -507,3 +509,10 @@ persisted pipeline path.
 - `POST /courses` `{ id, courseName, description?, status?, boxFolderId? }` — creates a course with details only; sections and lessons come through `POST /courses/import`. The id is the lesson-id prefix (`25Sim` → `25Sim01_01`), fixed once created (letters, digits, `-`, `_`). 201 / 400 / 409 id taken.
 - `PATCH /courses/:courseId` — any of `courseName`, `description` (`""` clears), `status`, `boxFolderId` (`""` clears). 400 / 404.
 - `boxFolderId` (numeric) is the course's top-level Box folder; also accepted by `POST /courses/import` (omit = unchanged) and returned by `GET /courses/:courseId`.
+
+### Course audio job
+- `POST /courses/:courseId/localizations/:targetLanguage/generate` → `202 { jobId, job }`. For one language (`en` too), into the course's Box folder: writes `<Language> Segments.txt` per lesson (unchanged files skipped), then every missing clip (`<Language>/<lessonId>/<Language> Clips/…`). Lessons not fully translated are skipped (no DeepL). Re-running continues. Progress: `succeeded`, `failed`, `skipped`, `stats { segmentFiles, clips, characters }`. 400 no Box folder / no voice, 404, 409 active job.
+- `GET /courses/:courseId/jobs` — the course's latest 20 jobs (translate + generate), newest first, so a page can resume polling.
+
+### Box status
+- `GET /storage/box/status` → `{ connected, account: { id, name, login } }` — signs in and reports the account. With the Box app's client-credentials login this is the app's service account: its `login` must be an Editor on each course folder. 502 with Box's message when sign-in fails.
