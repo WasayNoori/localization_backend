@@ -502,3 +502,8 @@ persisted pipeline path.
 ### Translation settings per language
 - `GET /languages/translation-settings` — formality per configured language.
 - `PUT /languages/:targetLanguage/translation-settings` `{ "formality": "more" }` — `more` formal (usted/vous/Sie), `less` informal, `prefer_*` ignored by languages without formality, `default` = DeepL decides. Sent with every DeepL request for the language. Existing translations under a different formality become stale: `npm run course:translate -- <courseId> <lang>` (missing mode) re-translates them; their audio then needs regenerating.
+
+### Course details (create / edit)
+- `POST /courses` `{ id, courseName, description?, status?, boxFolderId? }` — creates a course with details only; sections and lessons come through `POST /courses/import`. The id is the lesson-id prefix (`25Sim` → `25Sim01_01`), fixed once created (letters, digits, `-`, `_`). 201 / 400 / 409 id taken.
+- `PATCH /courses/:courseId` — any of `courseName`, `description` (`""` clears), `status`, `boxFolderId` (`""` clears). 400 / 404.
+- `boxFolderId` (numeric) is the course's top-level Box folder; also accepted by `POST /courses/import` (omit = unchanged) and returned by `GET /courses/:courseId`.

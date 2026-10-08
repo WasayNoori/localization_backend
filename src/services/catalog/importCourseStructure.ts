@@ -28,6 +28,8 @@ export interface ImportCourseInput {
   description?: string;
   /** 'Released' | 'Draft'. Omit to leave the stored status unchanged. */
   status?: "Released" | "Draft";
+  /** Top-level Box folder id. Omit to leave it unchanged; "" clears it. */
+  boxFolderId?: string;
   sections: ImportSectionInput[];
 }
 
@@ -91,6 +93,8 @@ export async function importCourseStructure(
     return await db.transaction(async (tx) => {
       const [existingCourse] = await tx.select().from(courses).where(eq(courses.id, input.id)).limit(1);
       const description = input.description === undefined ? undefined : input.description.trim() || null;
+      const boxFolderId = input.boxFolderId === undefined ? undefined : input.boxFolderId.trim() || null;
+      if (boxFolderId && !/^\d+$/.test(boxFolderId)) throw new CourseImportValidationError(`boxFolderId must be a numeric Box folder id: "${boxFolderId}"`);
       const previousSections = await tx
         .select({ sectionIndex: courseSections.sectionIndex, title: courseSections.title })
         .from(courseSections)
@@ -102,13 +106,14 @@ export async function importCourseStructure(
 
       await tx
         .insert(courses)
-        .values({ id: input.id, courseName: input.courseName, description: description ?? null, status: input.status ?? null })
+        .values({ id: input.id, courseName: input.courseName, description: description ?? null, status: input.status ?? null, boxFolderId: boxFolderId ?? null })
         .onConflictDoUpdate({
           target: courses.id,
           set: {
             courseName: input.courseName,
             ...(description !== undefined ? { description } : {}),
             ...(input.status !== undefined ? { status: input.status } : {}),
+            ...(boxFolderId !== undefined ? { boxFolderId } : {}),
             updatedAt: now,
           },
         });
@@ -143,7 +148,8 @@ export async function importCourseStructure(
           !!existingCourse &&
           (existingCourse.courseName !== input.courseName ||
             (description !== undefined && description !== existingCourse.description) ||
-            (input.status !== undefined && input.status !== existingCourse.status)),
+            (input.status !== undefined && input.status !== existingCourse.status) ||
+            (boxFolderId !== undefined && boxFolderId !== existingCourse.boxFolderId)),
         sectionCount: input.sections.length,
         lessonCount: allLessons.length,
         sectionsAdded: input.sections

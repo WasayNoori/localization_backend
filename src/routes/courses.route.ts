@@ -1,5 +1,12 @@
 // src/routes/courses.route.ts
 import type { FastifyInstance } from "fastify";
+import {
+  createCourse,
+  updateCourseDetails,
+  CourseDetailsError,
+  type CourseDetailsInput,
+  type NewCourseInput,
+} from "../services/catalog/saveCourseDetails.js";
 import { eq } from "drizzle-orm";
 import { courses, courseLessons, lessons } from "../db/schema.js";
 import { findMissingSegments } from "../services/generation/findMissingSegments.js";
@@ -80,6 +87,7 @@ export async function coursesRoute(app: FastifyInstance) {
             courseName: { type: "string", minLength: 1 },
             description: { type: "string" },
             status: { type: "string", enum: ["Released", "Draft"] },
+            boxFolderId: { type: "string" },
             sections: { type: "array", items: sectionImportSchema },
           },
         },
@@ -93,6 +101,66 @@ export async function coursesRoute(app: FastifyInstance) {
       } catch (err) {
         if (err instanceof CourseImportValidationError) {
           return reply.code(400).send({ error: "BadRequest", message: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  const courseDetailsProperties = {
+    courseName: { type: "string", minLength: 1 },
+    description: { type: "string" },
+    status: { type: "string", enum: ["Released", "Draft"] },
+    boxFolderId: { type: "string" },
+  } as const;
+
+  app.post(
+    "/courses",
+    {
+      schema: {
+        description:
+          "Creates a course with its details only (id, name, description, status, Box folder) — sections and " +
+          "lessons come in through POST /courses/import. The id is also the lesson-id prefix (25Sim → 25Sim01_01) " +
+          "and can't change later: letters, digits, '-', '_'. boxFolderId is the course's top-level Box folder " +
+          "(numeric). 201 created, 400 invalid, 409 id taken.",
+        security: [{ apiKey: [] }],
+        body: {
+          type: "object",
+          required: ["id", "courseName"],
+          additionalProperties: false,
+          properties: { id: { type: "string", minLength: 1 }, ...courseDetailsProperties },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        return reply.code(201).send(await createCourse(app.db, request.body as NewCourseInput));
+      } catch (err) {
+        if (err instanceof CourseDetailsError) return reply.code(err.statusCode).send({ error: "BadRequest", message: err.message });
+        throw err;
+      }
+    }
+  );
+
+  app.patch(
+    "/courses/:courseId",
+    {
+      schema: {
+        description:
+          "Edits a course's details: name, description (\"\" clears), status, boxFolderId (\"\" clears). " +
+          "Omitted fields are unchanged; the id can't be changed. 400 invalid, 404 unknown course.",
+        security: [{ apiKey: [] }],
+        params: { type: "object", required: ["courseId"], properties: { courseId: { type: "string" } } },
+        body: { type: "object", additionalProperties: false, properties: courseDetailsProperties },
+      },
+    },
+    async (request, reply) => {
+      const { courseId } = request.params as { courseId: string };
+      try {
+        return reply.send(await updateCourseDetails(app.db, courseId, request.body as CourseDetailsInput));
+      } catch (err) {
+        if (err instanceof CourseDetailsError) {
+          return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
         throw err;
       }

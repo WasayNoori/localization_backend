@@ -1,0 +1,1 @@
+ALTER TABLE "courses" ADD COLUMN "box_folder_id" text;

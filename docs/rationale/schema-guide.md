@@ -503,3 +503,8 @@ create index tts_clips_qc_status_idx on tts_clips (qc_status);
 
 Open design questions have moved to `docs/decisions.md`, per this file's own
 rule against embedding unresolved questions here.
+## `courses.box_folder_id`
+Top-level Box folder per course (numeric id, nullable). Audio and Segments.txt
+go under it as `<Language>/<lessonId>/<Language> Clips/` — the same layout as
+the local output folder. Set on the course page, via `PATCH /courses/:id`, or
+in the import JSON.
