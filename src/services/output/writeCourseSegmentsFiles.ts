@@ -31,7 +31,7 @@ export class WriteSegmentsError extends Error {
 export async function writeCourseSegmentsFiles(
   deps: { db: Database; outputStore: ILessonOutputStore },
   courseId: string,
-  options: { languages: string[]; courseFolder?: string }
+  options: { languages: string[]; courseFolder?: string; /** Only these lessons (default: the whole course). */ lessonIds?: string[] }
 ): Promise<WriteSegmentsResult> {
   const { db } = deps;
   const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
@@ -46,7 +46,8 @@ export async function writeCourseSegmentsFiles(
   }
 
   const result: WriteSegmentsResult = { courseFolder, written: [], skipped: [] };
-  for (const lessonId of await courseLessonOrder(db, courseId)) {
+  const only = options.lessonIds?.length ? new Set(options.lessonIds) : null;
+  for (const lessonId of (await courseLessonOrder(db, courseId)).filter((id) => !only || only.has(id))) {
     const segments = await db
       .select({ id: lessonSegments.id, text: lessonSegments.text })
       .from(lessonSegments)
