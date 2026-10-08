@@ -20,9 +20,11 @@ const KIND_LABEL: Record<ReviewItem["kind"], string> = {
   section: "section title",
   lessonName: "lesson name",
   lessonDescription: "lesson description",
+  quizQuestion: "quiz question",
+  quizAnswer: "quiz answer option",
 };
 
-const SYSTEM_PROMPT = `You check machine translations of e-learning course scaffolding — course names and descriptions, section titles, lesson names and lesson descriptions — for SOLIDWORKS / CAD engineering training. The English is the source. The translations come from DeepL, which is the reference translator.
+const SYSTEM_PROMPT = `You check machine translations of e-learning course text — course names and descriptions, section titles, lesson names and lesson descriptions, and quiz questions with their answer options — for SOLIDWORKS / CAD engineering training. The English is the source. The translations come from DeepL, which is the reference translator.
 
 Your only job is to catch translations that are clearly WRONG. Flag an item only when:
 - its meaning contradicts the English or loses what it says, or

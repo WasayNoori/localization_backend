@@ -61,6 +61,7 @@ export interface CourseStructure {
   description: string | null;
   status: string | null;
   boxFolderId: string | null;
+  mondayBoardId: string | null;
   updatedAt: Date;
   segmentCount: number;
   coverage: (LanguageCoverage & { lessonsComplete: number })[];
@@ -141,6 +142,7 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
     description: course.description,
     status: course.status,
     boxFolderId: course.boxFolderId,
+    mondayBoardId: course.mondayBoardId,
     updatedAt: course.updatedAt,
     segmentCount: totals.segmentCount,
     coverage: totals.languages,

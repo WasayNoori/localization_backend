@@ -1,10 +1,10 @@
 // src/interfaces/ITranslationReviewer.ts
 
-/** One translated piece of course scaffolding to sanity-check. */
+/** One translated piece of course text (scaffolding or a quiz question/answer) to sanity-check. */
 export interface ReviewItem {
   /** Caller's id for matching verdicts back (e.g. "section:<uuid>"). */
   key: string;
-  kind: "course" | "courseDescription" | "section" | "lessonName" | "lessonDescription";
+  kind: "course" | "courseDescription" | "section" | "lessonName" | "lessonDescription" | "quizQuestion" | "quizAnswer";
   source: string;
   translation: string;
 }

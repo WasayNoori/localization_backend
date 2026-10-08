@@ -28,6 +28,8 @@ export interface ImportCourseInput {
   status?: "Released" | "Draft";
   /** Top-level Box folder id. Omit to leave it unchanged; "" clears it. */
   boxFolderId?: string;
+  /** monday.com board id. Omit to leave it unchanged; "" clears it. */
+  mondayBoardId?: string;
   sections: ImportSectionInput[];
 }
 
@@ -89,6 +91,8 @@ export async function importCourseStructure(
       const description = input.description === undefined ? undefined : input.description.trim() || null;
       const boxFolderId = input.boxFolderId === undefined ? undefined : input.boxFolderId.trim() || null;
       if (boxFolderId && !/^\d+$/.test(boxFolderId)) throw new CourseImportValidationError(`boxFolderId must be a numeric Box folder id: "${boxFolderId}"`);
+      const mondayBoardId = input.mondayBoardId === undefined ? undefined : input.mondayBoardId.trim() || null;
+      if (mondayBoardId && !/^\d+$/.test(mondayBoardId)) throw new CourseImportValidationError(`mondayBoardId must be a numeric monday.com board id: "${mondayBoardId}"`);
       const previousSections = await tx
         .select({ sectionIndex: courseSections.sectionIndex, title: courseSections.title })
         .from(courseSections)
@@ -100,7 +104,7 @@ export async function importCourseStructure(
 
       await tx
         .insert(courses)
-        .values({ id: input.id, courseName: input.courseName, description: description ?? null, status: input.status ?? null, boxFolderId: boxFolderId ?? null })
+        .values({ id: input.id, courseName: input.courseName, description: description ?? null, status: input.status ?? null, boxFolderId: boxFolderId ?? null, mondayBoardId: mondayBoardId ?? null })
         .onConflictDoUpdate({
           target: courses.id,
           set: {
@@ -108,6 +112,7 @@ export async function importCourseStructure(
             ...(description !== undefined ? { description } : {}),
             ...(input.status !== undefined ? { status: input.status } : {}),
             ...(boxFolderId !== undefined ? { boxFolderId } : {}),
+            ...(mondayBoardId !== undefined ? { mondayBoardId } : {}),
             updatedAt: now,
           },
         });
@@ -143,7 +148,8 @@ export async function importCourseStructure(
           (existingCourse.courseName !== input.courseName ||
             (description !== undefined && description !== existingCourse.description) ||
             (input.status !== undefined && input.status !== existingCourse.status) ||
-            (boxFolderId !== undefined && boxFolderId !== existingCourse.boxFolderId)),
+            (boxFolderId !== undefined && boxFolderId !== existingCourse.boxFolderId) ||
+            (mondayBoardId !== undefined && mondayBoardId !== existingCourse.mondayBoardId)),
         sectionCount: input.sections.length,
         lessonCount: allLessons.length,
         sectionsAdded: input.sections

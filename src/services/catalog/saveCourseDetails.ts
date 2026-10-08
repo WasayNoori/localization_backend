@@ -13,6 +13,8 @@ export interface CourseDetailsInput {
   status?: CourseStatus;
   /** Numeric Box folder id; "" clears it. */
   boxFolderId?: string;
+  /** Numeric monday.com board id; "" clears it. */
+  mondayBoardId?: string;
 }
 
 export interface NewCourseInput extends CourseDetailsInput {
@@ -52,6 +54,7 @@ export async function createCourse(db: Database, input: NewCourseInput) {
       description: values.description ?? null,
       status: values.status ?? null,
       boxFolderId: values.boxFolderId ?? null,
+      mondayBoardId: values.mondayBoardId ?? null,
     })
     .returning();
   return created;
@@ -72,9 +75,15 @@ export async function updateCourseDetails(db: Database, courseId: string, input:
   return updated;
 }
 
-/** Trims text, turns "" into null for optional fields, validates the Box folder id. */
+/** Trims text, turns "" into null for optional fields, validates the Box folder and Monday board ids. */
 function normalize(input: CourseDetailsInput) {
-  const out: { courseName?: string; description?: string | null; status?: CourseStatus; boxFolderId?: string | null } = {};
+  const out: {
+    courseName?: string;
+    description?: string | null;
+    status?: CourseStatus;
+    boxFolderId?: string | null;
+    mondayBoardId?: string | null;
+  } = {};
   if (input.courseName !== undefined) out.courseName = input.courseName.trim();
   if (input.description !== undefined) out.description = input.description.trim() || null;
   if (input.status !== undefined) out.status = input.status;
@@ -82,6 +91,11 @@ function normalize(input: CourseDetailsInput) {
     const folder = input.boxFolderId.trim();
     if (folder && !/^\d+$/.test(folder)) throw new CourseDetailsError(400, `Box folder id must be numeric: "${input.boxFolderId}"`);
     out.boxFolderId = folder || null;
+  }
+  if (input.mondayBoardId !== undefined) {
+    const board = input.mondayBoardId.trim();
+    if (board && !/^\d+$/.test(board)) throw new CourseDetailsError(400, `Monday board id must be numeric: "${input.mondayBoardId}"`);
+    out.mondayBoardId = board || null;
   }
   return out;
 }

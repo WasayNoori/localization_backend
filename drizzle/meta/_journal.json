@@ -92,6 +92,13 @@
       "when": 1791421628633,
       "tag": "0012_course_box_folder",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791500392458,
+      "tag": "0013_course_monday_board",
+      "breakpoints": true
     }
   ]
 }

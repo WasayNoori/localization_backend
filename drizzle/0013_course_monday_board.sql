@@ -1,0 +1,1 @@
+ALTER TABLE "courses" ADD COLUMN "monday_board_id" text;

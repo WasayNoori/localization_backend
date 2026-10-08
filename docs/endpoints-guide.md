@@ -519,3 +519,13 @@ persisted pipeline path.
 
 ### Box status
 - `GET /storage/box/status` → `{ connected, account: { id, name, login } }` — signs in and reports the account. With the Box app's client-credentials login this is the app's service account: its `login` must be an Editor on each course folder. 502 with Box's message when sign-in fails.
+
+---
+
+## Quiz module (detachable) — `src/modules/quiz`
+
+Interim; see `src/modules/quiz/README.md`. Stores nothing about quizzes.
+
+- `GET /courses/:courseId/quiz` → `{ courseId, source, questions, byStatus, withoutQuestionText, lessonsNotInCourse }`. Reads the course's Monday board ("Quiz Questions" group) live; nothing is translated. 400 no Monday board / board unreadable, 404.
+- `POST /courses/:courseId/quiz/translations/:targetLanguage` `{ review?: boolean (default true) }` → `202 { jobId, job }` (type `quiz`, queued per course). Every question is translated (question + options in one DeepL request, glossary + formality; TRUE/FALSE fixed words), optionally checked by Claude, and written to `<LANG>/Quiz Questions/<courseId> Quiz Questions <LANG>.xlsx` in the course's Box folder, replacing the previous file. Progress: `stats { questions, translated, characters, flagged }`, `notes` (flagged questions), `options { file, fileId }`. 400 `en` / no Monday board / no Box folder, 404, 409 already running.
+- Course details (`POST /courses`, `PATCH /courses/:courseId`, `POST /courses/import`) accept `mondayBoardId` (numeric; `""` clears); `GET /courses/:courseId` returns it.

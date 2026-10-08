@@ -88,6 +88,7 @@ export async function coursesRoute(app: FastifyInstance) {
             description: { type: "string" },
             status: { type: "string", enum: ["Released", "Draft"] },
             boxFolderId: { type: "string" },
+            mondayBoardId: { type: "string" },
             sections: { type: "array", items: sectionImportSchema },
           },
         },
@@ -112,6 +113,7 @@ export async function coursesRoute(app: FastifyInstance) {
     description: { type: "string" },
     status: { type: "string", enum: ["Released", "Draft"] },
     boxFolderId: { type: "string" },
+    mondayBoardId: { type: "string" },
   } as const;
 
   app.post(
@@ -122,7 +124,7 @@ export async function coursesRoute(app: FastifyInstance) {
           "Creates a course with its details only (id, name, description, status, Box folder) — sections and " +
           "lessons come in through POST /courses/import. The id is also the lesson-id prefix (25Sim → 25Sim01_01) " +
           "and can't change later: letters, digits, '-', '_'. boxFolderId is the course's top-level Box folder " +
-          "(numeric). 201 created, 400 invalid, 409 id taken.",
+          "(numeric); mondayBoardId the course's monday.com board (numeric). 201 created, 400 invalid, 409 id taken.",
         security: [{ apiKey: [] }],
         body: {
           type: "object",
@@ -147,7 +149,7 @@ export async function coursesRoute(app: FastifyInstance) {
     {
       schema: {
         description:
-          "Edits a course's details: name, description (\"\" clears), status, boxFolderId (\"\" clears). " +
+          "Edits a course's details: name, description (\"\" clears), status, boxFolderId and mondayBoardId (\"\" clears). " +
           "Omitted fields are unchanged; the id can't be changed. 400 invalid, 404 unknown course.",
         security: [{ apiKey: [] }],
         params: { type: "object", required: ["courseId"], properties: { courseId: { type: "string" } } },

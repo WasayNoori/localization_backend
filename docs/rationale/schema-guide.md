@@ -98,6 +98,7 @@ building. Remains after LCMS ships; `id` itself never changes.
 | `course_name`   | text        |                                                                          |
 | `description`   | text, null  | Learner-facing course description; part of the scaffolding (translated into `course_translations.description`). Set via `POST /courses/import` |
 | `status`        | text, null  | `Released` \| `Draft`. Owned by the BI app/LCMS; set via `POST /courses/import` until a catalog sync exists |
+| `monday_board_id` | text, null | The course's monday.com board (numeric id). Read by the quiz module for quiz questions; set on Edit details or via import |
 | `lcms_course_id`| text, null, unique | Mapping to the LCMS-issued course id, populated once LCMS ships. Null until then |
 | `created_at`    | timestamptz | default `now()`                                                         |
 | `updated_at`    | timestamptz | default `now()`, bump on update                                         |

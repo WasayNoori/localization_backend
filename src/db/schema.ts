@@ -30,6 +30,9 @@ export const courses = pgTable("courses", {
   // <LANG>/<lessonId>/<Language> Clips/ under it. Null = not set (audio
   // can't go to Box for this course yet).
   boxFolderId: text("box_folder_id"),
+  // The course's monday.com board (lessons, statuses, quiz questions live
+  // there). Numeric board id; null = not set.
+  mondayBoardId: text("monday_board_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -643,3 +643,13 @@ job "failed" (never hide partial failure). Box is read fresh, not through the
 upload cache, so the audit sees what's really there. Numbering gaps and extra
 files are warnings only — gaps can be deliberate (a lesson dropped as a
 duplicate).
+
+## Quiz translation is a detachable, stateless module
+Quizzes will get their own database, so quiz translation (src/modules/quiz) stores
+nothing here: each run reads the course's Monday board, translates and writes an
+.xlsx per language to Box. It plugs in with one line in app.ts and wires its own
+pieces behind its own interfaces (source, output, course context); removing it is
+deleting the folder and that line. Built in code rather than as a Claude skill
+because it must run unattended, repeatably, with the glossary/formality/Box/job
+machinery the backend already has. The only schema change is
+courses.monday_board_id — general course data, kept if the module goes.
