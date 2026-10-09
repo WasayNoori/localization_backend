@@ -25,6 +25,8 @@ import type { ILessonOutputStore } from "../interfaces/ILessonOutputStore.js";
 import { LocalFolderLessonOutputStore } from "../services/output/LocalFolderLessonOutputStore.js";
 import type { IClipStore } from "../interfaces/IClipStore.js";
 import { BoxClipStore } from "../services/output/BoxClipStore.js";
+import type { IMondayBoardReader } from "../interfaces/IMondayBoardReader.js";
+import { MondayBoardReader } from "../services/monday/MondayBoardReader.js";
 
 export interface Secrets {
   apiKey: string;
@@ -48,6 +50,8 @@ declare module "fastify" {
     scriptProofreader: IScriptProofreader;
     /** Null when LOCAL_OUTPUT_ROOT isn't set. */
     lessonOutputStore: ILessonOutputStore | null;
+    /** monday.com, read-only (course boards). */
+    mondayBoardReader: IMondayBoardReader;
     // decorate with concrete service implementations as they're built, ...
   }
 }
@@ -94,4 +98,6 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const lessonOutputStore = env.LOCAL_OUTPUT_ROOT ? new LocalFolderLessonOutputStore(env.LOCAL_OUTPUT_ROOT) : null;
   app.decorate("lessonOutputStore", lessonOutputStore);
+
+  app.decorate("mondayBoardReader", new MondayBoardReader(secretsProvider));
 });

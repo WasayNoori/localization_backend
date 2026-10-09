@@ -16,7 +16,7 @@ export async function quizModule(app: FastifyInstance): Promise<void> {
     translationService: app.translationService,
     translationReviewer: app.translationReviewer,
     courseContext: new DbQuizCourseContext(app.db),
-    source: new MondayQuizSource(app.secretsProvider),
+    source: new MondayQuizSource(app.mondayBoardReader),
     output: new BoxQuizWorkbookStore(app.fileStorageService),
   };
   await app.register(quizRoutes(deps));

@@ -8,7 +8,7 @@ fresh file.
 1. **Source** — `MondayQuizSource`: the course's monday.com board (`courses.monday_board_id`), group
    "Quiz Questions". One item = one question; item name = lesson id (matched to the course's lessons ignoring
    case). Columns found by title: QQ ID, Quiz Question, A–D, Correct Answer, QQ Review Status, QQ Image URL.
-   API token: secret `monday-api-key`.
+   Read through the shared `IMondayBoardReader` (`app.mondayBoardReader`; secret `monday-api-key`).
 2. **Translate** — `translateQuizQuestions`: per question, question + answer options in one DeepL request
    (glossary + formality via `translateTexts`; the question is context for its options). TRUE/FALSE → fixed
    words. Every question, whatever its review status. A blank (`____`) lost in translation is flagged; the
