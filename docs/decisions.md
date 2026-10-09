@@ -653,3 +653,12 @@ deleting the folder and that line. Built in code rather than as a Claude skill
 because it must run unattended, repeatably, with the glossary/formality/Box/job
 machinery the backend already has. The only schema change is
 courses.monday_board_id — general course data, kept if the module goes.
+
+## Course outline can be imported from Monday (one-way, on demand)
+src/modules/monday-outline reads the course board's "Section N - Title" groups and
+feeds the existing structure import (same preview/confirm, same rules) — no
+second import path. One-way and user-triggered, not a sync, because the BI app
+may own course metadata later. Monday item names and course ids can differ in
+casing, so lesson ids resolve as: existing lesson (case-insensitive) → course-id
+prefix recased → as is (reported). Monday access is the shared
+IMondayBoardReader, also used by the quiz module.

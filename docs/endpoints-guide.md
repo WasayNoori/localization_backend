@@ -529,3 +529,9 @@ Interim; see `src/modules/quiz/README.md`. Stores nothing about quizzes.
 - `GET /courses/:courseId/quiz` → `{ courseId, source, questions, byStatus, withoutQuestionText, lessonsNotInCourse }`. Reads the course's Monday board ("Quiz Questions" group) live; nothing is translated. 400 no Monday board / board unreadable, 404.
 - `POST /courses/:courseId/quiz/translations/:targetLanguage` `{ review?: boolean (default true) }` → `202 { jobId, job }` (type `quiz`, queued per course). Every question is translated (question + options in one DeepL request, glossary + formality; TRUE/FALSE fixed words), optionally checked by Claude, and written to `<LANG>/Quiz Questions/<courseId> Quiz Questions <LANG>.xlsx` in the course's Box folder, replacing the previous file. Progress: `stats { questions, translated, characters, flagged }`, `notes` (flagged questions), `options { file, fileId }`. 400 `en` / no Monday board / no Box folder, 404, 409 already running.
 - Course details (`POST /courses`, `PATCH /courses/:courseId`, `POST /courses/import`) accept `mondayBoardId` (numeric; `""` clears); `GET /courses/:courseId` returns it.
+
+---
+
+## Monday outline module (detachable) — `src/modules/monday-outline`
+
+- `POST /courses/:courseId/import/monday` (`?dryRun=true` previews) → the `POST /courses/import` result plus `monday { board, sections, lessons, idChanges[], idsNotMatchingCourse[], skippedGroups[], skippedItems[] }`. Reads the course's Monday board: groups `Section N - Title` → sections, their items → lessons (item name = lesson id; Lesson Name, Lesson Description, Lesson Level Tags). Lesson-id casing: existing lesson (case-insensitive) keeps its id → else course-id prefix recased → else as is. Course name/description/status unchanged. 400 no Monday board / unreadable / no section groups / invalid structure, 404.
