@@ -1,0 +1,450 @@
+From a4f1bdf4f0935069d55f56f512aa70ea442208e8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 7 Oct 2026 20:49:17 -0700
+Subject: [PATCH] Translate job: optional typo check + parse (shared,
+ idempotent, never changes a localized lesson), scaffolding, scripts;
+ per-course queue for translation jobs
+
+---
+ docs/decisions.md                             |  13 ++
+ docs/pipeline-flow.md                         |  11 +-
+ src/db/schema.ts                              |   6 +
+ src/plugins/container.ts                      |   4 +
+ src/routes/courses.route.ts                   |  29 +++--
+ src/services/jobs/courseTranslationJob.ts     | 106 +++++++++++++---
+ .../translation/prepareCourseScripts.ts       | 118 ++++++++++++++++++
+ 7 files changed, 256 insertions(+), 31 deletions(-)
+ create mode 100644 src/services/translation/prepareCourseScripts.ts
+
+diff --git a/docs/decisions.md b/docs/decisions.md
+index a86e8e6..bdb5323 100644
+--- a/docs/decisions.md
++++ b/docs/decisions.md
+@@ -586,6 +586,19 @@ convention; file and Clips-folder names keep the full language name.
+ Defined once in `outputLayout.languageFolder`. Clips generated locally before
+ this (POC) keep their recorded `local_path` with the old "French/" folder.
+ 
++## One "Translate" per language: typo check → parse → names → scripts
++The course page's Translate (POST /courses/:id/translations/:lang) is the whole
++text side for a language. It first gets the scripts ready — optional Claude
++typo check of scripts not checked yet (mechanical fixes applied, the rest
++listed in progress.review), then parsing of lessons not parsed — then the
++scaffolding (missing/stale), then the scripts. Getting scripts ready is shared
++by every language and idempotent; a script is never changed for a lesson that
++already has translations or audio in any language (its fixes are noted
++instead), because a changed script means re-cutting segments, which deletes
++them. Translation jobs of one course run one after another (in-process queue,
++"pending" while waiting) so two languages never re-cut the same lesson. Audio
++stays its own job, run per language in parallel.
++
+ ## Open questions (not yet settled)
+ - Do failed/superseded `tts_clips` attempts get deleted after a retention
+   window, or kept indefinitely for audit?
+diff --git a/docs/pipeline-flow.md b/docs/pipeline-flow.md
+index 33f49d4..f18a739 100644
+--- a/docs/pipeline-flow.md
++++ b/docs/pipeline-flow.md
+@@ -179,4 +179,13 @@ Overwrites the segment's `segment_translations` row by calling DeepL again via
+ generate loop uses for a never-yet-translated segment), but never touches
+ `tts_clips`. Audio regeneration from the corrected translation is a
+ separate, explicit call back into the generate loop above (`segmentId` +
+-`force: true`) — see `docs/decisions.md`.
+\ No newline at end of file
++`force: true`) — see `docs/decisions.md`.
++## Course translation job (the console's "Translate")
++`POST /courses/:courseId/translations/:lang` `{ proofread?, mode? }` → job:
++1. `prepareCourseScripts` — typo check (if `proofread`) of scripts never
++   checked (`script_source_text` null), then parse lessons not parsed (or
++   whose script changed and that have nothing to lose). Shared by all languages.
++2. `translateCourseScaffolding(missing)` — course name, section titles, lesson
++   names/descriptions; Claude flags show on the course page.
++3. `translateCourseLessons(mode)` — the scripts.
++Jobs of one course queue (status `pending`) behind each other.
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index bb4fe7c..15f4220 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -214,6 +214,12 @@ export interface ProcessingJobProgress {
+   error?: string;
+   /** Running totals, e.g. audio jobs: { segmentFiles, clips, characters }. */
+   stats?: Record<string, number>;
++  /** What the job is doing now, e.g. "proofreading", "scaffolding", "translating". */
++  phase?: string;
++  /** Proposed script fixes a person should decide (typo check). */
++  review?: { lessonId: string; original: string; corrected: string; reason: string; why: string }[];
++  /** Per-lesson remarks that aren't failures (e.g. fixes held back, scaffolding flags). */
++  notes?: { lessonId: string; note: string }[];
+ }
+ 
+ // Tracks course-level async fan-out only. Lesson-level parse/generate stay
+diff --git a/src/plugins/container.ts b/src/plugins/container.ts
+index 2cc4a35..7262166 100644
+--- a/src/plugins/container.ts
++++ b/src/plugins/container.ts
+@@ -16,6 +16,8 @@ import type { IAudioQcService } from "../interfaces/IAudioQcService.js";
+ import { BasicAudioQcService } from "../services/qc/BasicAudioQcService.js";
+ import type { ITranslationReviewer } from "../interfaces/ITranslationReviewer.js";
+ import { ClaudeTranslationReviewer } from "../services/review/ClaudeTranslationReviewer.js";
++import type { IScriptProofreader } from "../interfaces/IScriptProofreader.js";
++import { ClaudeScriptProofreader } from "../services/proofreading/ClaudeScriptProofreader.js";
+ import { createDbClient, type Database } from "../db/client.js";
+ import { buildSecretsProvider } from "./secrets-provider.js";
+ import { failInterruptedJobs } from "../services/jobs/courseTranslationJob.js";
+@@ -43,6 +45,7 @@ declare module "fastify" {
+     nlpService: INlpService;
+     qcService: IAudioQcService;
+     translationReviewer: ITranslationReviewer;
++    scriptProofreader: IScriptProofreader;
+     /** Null when LOCAL_OUTPUT_ROOT isn't set. */
+     lessonOutputStore: ILessonOutputStore | null;
+     // decorate with concrete service implementations as they're built, ...
+@@ -87,6 +90,7 @@ export const container = fp(async (app: FastifyInstance) => {
+ 
+   const translationReviewer = new ClaudeTranslationReviewer(secretsProvider, env.ANTHROPIC_REVIEW_MODEL);
+   app.decorate("translationReviewer", translationReviewer);
++  app.decorate("scriptProofreader", new ClaudeScriptProofreader(secretsProvider, env.ANTHROPIC_REVIEW_MODEL));
+ 
+   const lessonOutputStore = env.LOCAL_OUTPUT_ROOT ? new LocalFolderLessonOutputStore(env.LOCAL_OUTPUT_ROOT) : null;
+   app.decorate("lessonOutputStore", lessonOutputStore);
+diff --git a/src/routes/courses.route.ts b/src/routes/courses.route.ts
+index 12b1bda..3e390e0 100644
+--- a/src/routes/courses.route.ts
++++ b/src/routes/courses.route.ts
+@@ -343,12 +343,15 @@ export async function coursesRoute(app: FastifyInstance) {
+       preValidation: defaultEmptyBody,
+       schema: {
+         description:
+-          "Course-level translation job: translates every parsed lesson's segments into one language via the " +
+-          "lesson translation (DeepL, glossary, full-lesson context), one lesson at a time in course order. " +
+-          "Async — returns 202 { jobId } at once; poll GET /jobs/:jobId (progress: total, succeeded, failed, " +
+-          "skipped). mode 'missing' (default) only translates segments with no translation yet, so re-running " +
+-          "continues an interrupted job; 'all' re-translates everything. Never generates audio. 409 (with the " +
+-          "running job) if this course + language already has an active job; 400 for 'en'; 404 unknown course.",
++          "Course-level translation job for one language: (1) gets the scripts ready — with proofread: true, " +
++          "Claude typo-checks scripts not checked yet (mechanical fixes applied; the rest listed in " +
++          "progress.review; a lesson that already has translations or audio is never changed) — and parses " +
++          "lessons not parsed yet; (2) translates the scaffolding (course/section/lesson names, descriptions — " +
++          "missing or stale); (3) translates the scripts, lesson by lesson. Async — 202 { jobId }; poll " +
++          "GET /jobs/:jobId (progress: phase, total, succeeded, failed, skipped, stats, review, notes). Jobs of " +
++          "one course queue behind each other ('pending'). mode 'missing' (default) only fills what's missing, so " +
++          "re-running continues; 'all' re-translates every segment. Never generates audio. 409 (with the job) if " +
++          "this course + language already has an active job; 400 for 'en'; 404 unknown course.",
+         security: [{ apiKey: [] }],
+         params: {
+           type: "object",
+@@ -358,19 +361,25 @@ export async function coursesRoute(app: FastifyInstance) {
+         body: {
+           type: "object",
+           additionalProperties: false,
+-          properties: { mode: { type: "string", enum: ["missing", "all"] } },
++          properties: { mode: { type: "string", enum: ["missing", "all"] }, proofread: { type: "boolean" } },
+         },
+       },
+     },
+     async (request, reply) => {
+       const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
+-      const { mode } = (request.body ?? {}) as { mode?: CourseTranslationMode };
++      const { mode, proofread } = (request.body ?? {}) as { mode?: CourseTranslationMode; proofread?: boolean };
+       try {
+         const job = await startCourseTranslationJob(
+-          { db: app.db, translationService: app.translationService, translationReviewer: app.translationReviewer },
++          {
++            db: app.db,
++            translationService: app.translationService,
++            translationReviewer: app.translationReviewer,
++            nlpService: app.nlpService,
++            scriptProofreader: app.scriptProofreader,
++          },
+           courseId,
+           targetLanguage,
+-          mode ?? "missing"
++          { mode: mode ?? "missing", proofread: !!proofread }
+         );
+         return reply.code(202).send({ jobId: job.id, job });
+       } catch (err) {
+diff --git a/src/services/jobs/courseTranslationJob.ts b/src/services/jobs/courseTranslationJob.ts
+index 43fb7e9..20aada6 100644
+--- a/src/services/jobs/courseTranslationJob.ts
++++ b/src/services/jobs/courseTranslationJob.ts
+@@ -2,6 +2,9 @@
+ import { and, eq, inArray } from "drizzle-orm";
+ import type { Database } from "../../db/client.js";
+ import { processingJobs, type ProcessingJobProgress } from "../../db/schema.js";
++import type { INlpService } from "../../interfaces/INlpService.js";
++import type { IScriptProofreader } from "../../interfaces/IScriptProofreader.js";
++import { prepareCourseScripts } from "../translation/prepareCourseScripts.js";
+ import {
+   assertTranslatableCourse,
+   courseLessonOrder,
+@@ -9,9 +12,18 @@ import {
+   type CourseTranslationMode,
+ } from "../translation/translateCourseLessons.js";
+ import type { TranslateLessonDeps } from "../translation/translateLessonSegments.js";
++import { translateCourseScaffolding } from "../translation/translateScaffolding.js";
+ 
+ export type ProcessingJob = typeof processingJobs.$inferSelect;
+ 
++export type CourseTranslationJobDeps = TranslateLessonDeps & { nlpService: INlpService; scriptProofreader: IScriptProofreader };
++
++export interface CourseTranslationOptions {
++  mode?: CourseTranslationMode;
++  /** Typo-check scripts (Claude) before parsing — scripts not checked yet only. */
++  proofread?: boolean;
++}
++
+ export class JobConflictError extends Error {
+   constructor(public readonly job: ProcessingJob) {
+     super(`A ${job.type} job for ${job.targetId} (${job.targetLanguage}) is already ${job.status}`);
+@@ -19,17 +31,26 @@ export class JobConflictError extends Error {
+ }
+ 
+ /**
+- * Starts "translate this course into one language" as a processing_jobs row
+- * and runs it in the background in this process (no queue yet). Returns the
+- * job immediately; poll GET /jobs/:jobId. One active job per course +
+- * language. Progress is written after every lesson, so a poll always shows
+- * real counts.
++ * Translation jobs of one course run one after another (in this process), so
++ * two languages never proofread or re-cut the same lesson at once. A job
++ * waiting its turn is "pending".
++ */
++const courseQueues = new Map<string, Promise<void>>();
++
++/**
++ * "Translate this course into one language" as a processing_jobs row, run in
++ * the background in this process. Returns at once; poll GET /jobs/:jobId.
++ * Steps: (1) get the scripts ready — typo check if asked, then parse what
++ * isn't parsed (shared by all languages; idempotent); (2) the scaffolding
++ * (course/section/lesson names, descriptions — missing or stale only);
++ * (3) the scripts. One active job per course + language; jobs of the same
++ * course queue behind each other.
+  */
+ export async function startCourseTranslationJob(
+-  deps: TranslateLessonDeps,
++  deps: CourseTranslationJobDeps,
+   courseId: string,
+   targetLanguage: string,
+-  mode: CourseTranslationMode = "missing"
++  options: CourseTranslationOptions = {}
+ ): Promise<ProcessingJob> {
+   const { db } = deps;
+   await assertTranslatableCourse(db, courseId, targetLanguage);
+@@ -57,33 +78,78 @@ export async function startCourseTranslationJob(
+       targetId: courseId,
+       type: "translate",
+       targetLanguage,
+-      status: "running",
+-      progress: { total, succeeded: [], failed: [], skipped: [], options: { mode } },
++      status: "pending",
++      progress: {
++        total,
++        succeeded: [],
++        failed: [],
++        skipped: [],
++        phase: "queued",
++        options: { mode: options.mode ?? "missing", proofread: String(!!options.proofread) },
++      },
+     })
+     .returning();
+ 
+-  void runCourseTranslationJob(deps, job).catch(() => {
+-    // runCourseTranslationJob records its own failure; nothing else to do here.
++  const previous = courseQueues.get(courseId) ?? Promise.resolve();
++  const mine = previous.then(() => runCourseTranslationJob(deps, job)).catch(() => {
++    // runCourseTranslationJob records its own failure.
++  });
++  courseQueues.set(courseId, mine);
++  void mine.finally(() => {
++    if (courseQueues.get(courseId) === mine) courseQueues.delete(courseId);
+   });
+   return job;
+ }
+ 
+-async function runCourseTranslationJob(deps: TranslateLessonDeps, job: ProcessingJob): Promise<void> {
++async function runCourseTranslationJob(deps: CourseTranslationJobDeps, job: ProcessingJob): Promise<void> {
+   const { db } = deps;
++  const language = job.targetLanguage!;
+   const mode = (job.progress.options?.mode as CourseTranslationMode | undefined) ?? "missing";
+-  const save = async (progress: ProcessingJobProgress, status: string): Promise<void> => {
+-    await db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
+-  };
++  const proofread = job.progress.options?.proofread === "true";
++  let progress: ProcessingJobProgress = { ...job.progress, notes: [], review: [] };
++  const save = (status: string) =>
++    db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
++
+   try {
+-    const result = await translateCourseLessons(deps, job.targetId, job.targetLanguage!, {
++    // 1. Scripts ready: typo check (optional) + parse what isn't parsed.
++    progress = { ...progress, phase: proofread ? "checking scripts" : "preparing scripts" };
++    await save("running");
++    const prep = await prepareCourseScripts(deps, job.targetId, { proofread });
++    progress = {
++      ...progress,
++      stats: { proofread: prep.proofread, fixesApplied: prep.fixesApplied, parsed: prep.parsed },
++      review: prep.review,
++      notes: prep.issues.map((i) => ({ lessonId: i.lessonId, note: i.issue })),
++    };
++
++    // 2. Scaffolding — names and descriptions (missing or stale only).
++    progress = { ...progress, phase: "translating names and descriptions" };
++    await save("running");
++    try {
++      const sc = await translateCourseScaffolding(deps, job.targetId, language, "missing");
++      if (sc.review.flagged) progress.notes!.push({ lessonId: "", note: `${sc.review.flagged} name/description translation(s) flagged by the reviewer — see the course page` });
++      if (sc.review.error) progress.notes!.push({ lessonId: "", note: `scaffolding review failed (translations saved, unreviewed): ${sc.review.error}` });
++    } catch (err) {
++      progress.notes!.push({ lessonId: "", note: `names and descriptions not translated: ${err instanceof Error ? err.message : String(err)}` });
++    }
++
++    // 3. Scripts.
++    progress = { ...progress, phase: "translating scripts" };
++    await save("running");
++    const result = await translateCourseLessons(deps, job.targetId, language, {
+       mode,
+-      onProgress: (p) => save({ ...p, options: job.progress.options }, "running"),
++      onProgress: async (p) => {
++        progress = { ...progress, succeeded: p.succeeded, failed: p.failed, skipped: p.skipped };
++        await save("running");
++      },
+     });
+-    const { stopped: _stopped, ...progress } = result;
++    const { stopped: _stopped, ...lessonsProgress } = result;
++    progress = { ...progress, ...lessonsProgress, phase: "done" };
+     // Settled rule (pipeline-flow.md): any failed lesson → "failed"; succeeded still lists what was done.
+-    await save({ ...progress, options: job.progress.options }, progress.failed.length ? "failed" : "completed");
++    await save(progress.failed.length ? "failed" : "completed");
+   } catch (err) {
+-    await save({ ...job.progress, error: err instanceof Error ? err.message : String(err) }, "failed");
++    progress = { ...progress, error: err instanceof Error ? err.message : String(err) };
++    await save("failed");
+     throw err;
+   }
+ }
+diff --git a/src/services/translation/prepareCourseScripts.ts b/src/services/translation/prepareCourseScripts.ts
+new file mode 100644
+index 0000000..a907442
+--- /dev/null
++++ b/src/services/translation/prepareCourseScripts.ts
+@@ -0,0 +1,118 @@
++// src/services/translation/prepareCourseScripts.ts
++import { and, eq, inArray, ne } from "drizzle-orm";
++import type { Database } from "../../db/client.js";
++import { lessons, lessonSegments, segmentTranslations, ttsClips } from "../../db/schema.js";
++import type { INlpService } from "../../interfaces/INlpService.js";
++import type { IScriptProofreader } from "../../interfaces/IScriptProofreader.js";
++import { parseLessonSegments } from "../parsing/parseLessonSegments.js";
++import { applyScriptCorrections } from "../proofreading/applyScriptCorrections.js";
++import { courseLessonOrder } from "./translateCourseLessons.js";
++
++export interface PrepareScriptsDeps {
++  db: Database;
++  nlpService: INlpService;
++  /** Required when `proofread` is on. */
++  scriptProofreader?: IScriptProofreader;
++}
++
++/** A proposed fix that wasn't applied automatically — a person decides. */
++export interface ScriptReviewItem {
++  lessonId: string;
++  original: string;
++  corrected: string;
++  reason: string;
++  why: string;
++}
++
++export interface PrepareScriptsResult {
++  /** Lessons proofread in this run. */
++  proofread: number;
++  /** Mechanical fixes applied to scripts. */
++  fixesApplied: number;
++  /** Lessons (re-)cut into segments in this run. */
++  parsed: number;
++  review: ScriptReviewItem[];
++  /** Per-lesson problems (proofreading or parsing failed, or fixes held back). */
++  issues: { lessonId: string; issue: string }[];
++}
++
++/**
++ * Gets a course's scripts ready to translate, once for all languages:
++ *  1. proofread (optional) — every script not proofread yet; mechanical fixes
++ *     are applied, the rest is returned for review. A lesson that already has
++ *     translations or audio in any language is never changed (changing its
++ *     script means re-cutting its segments, which deletes them) — its fixes
++ *     are reported instead.
++ *  2. parse — every lesson with a script and no segments, or whose script
++ *     changed and that has nothing to lose yet.
++ * Idempotent: a second run finds nothing left to do.
++ */
++export async function prepareCourseScripts(
++  deps: PrepareScriptsDeps,
++  courseId: string,
++  options: { proofread: boolean; onLesson?: () => void | Promise<void> }
++): Promise<PrepareScriptsResult> {
++  const { db } = deps;
++  const result: PrepareScriptsResult = { proofread: 0, fixesApplied: 0, parsed: 0, review: [], issues: [] };
++  const ids = await courseLessonOrder(db, courseId);
++  if (!ids.length) return result;
++  if (options.proofread && !deps.scriptProofreader) throw new Error("Proofreading isn't configured");
++
++  const rows = await db.select().from(lessons).where(inArray(lessons.id, ids));
++  const byId = new Map(rows.map((r) => [r.id, r]));
++
++  for (const lessonId of ids) {
++    let lesson = byId.get(lessonId);
++    if (!lesson?.scriptText) continue; // no script yet — translation will report it as not parsed
++
++    if (options.proofread && lesson.scriptSourceText === null) {
++      try {
++        const original = lesson.scriptText;
++        const outcome = applyScriptCorrections(original, await deps.scriptProofreader!.proofread({ lessonId, text: original }));
++        result.proofread++;
++        result.review.push(...outcome.review.map((r) => ({ lessonId, original: r.original, corrected: r.corrected, reason: r.reason, why: r.why })));
++        const changed = outcome.text !== original;
++        if (changed && (await hasLocalizedWork(db, lessonId))) {
++          result.issues.push({ lessonId, issue: `${outcome.applied.length} typo fix(es) not applied — the lesson already has translations or audio` });
++          await db.update(lessons).set({ scriptSourceText: original }).where(eq(lessons.id, lessonId));
++        } else {
++          const now = new Date();
++          [lesson] = await db
++            .update(lessons)
++            .set({ scriptText: outcome.text, scriptSourceText: original, ...(changed ? { scriptUpdatedAt: now } : {}), updatedAt: now })
++            .where(eq(lessons.id, lessonId))
++            .returning();
++          if (changed) result.fixesApplied += outcome.applied.length;
++        }
++      } catch (err) {
++        result.issues.push({ lessonId, issue: `proofreading failed: ${err instanceof Error ? err.message : String(err)}` });
++      }
++    }
++
++    const neverParsed = !lesson.parsedAt;
++    const stale = !!lesson.parsedAt && !!lesson.scriptUpdatedAt && lesson.scriptUpdatedAt > lesson.parsedAt;
++    if (neverParsed || (stale && !(await hasLocalizedWork(db, lessonId)))) {
++      try {
++        await parseLessonSegments({ db, nlpService: deps.nlpService }, lessonId);
++        result.parsed++;
++      } catch (err) {
++        result.issues.push({ lessonId, issue: `parsing failed: ${err instanceof Error ? err.message : String(err)}` });
++      }
++    }
++    await options.onLesson?.();
++  }
++  return result;
++}
++
++/** Any translation or (non-superseded) audio in any language for the lesson's segments. */
++async function hasLocalizedWork(db: Database, lessonId: string): Promise<boolean> {
++  const segs = db.select({ id: lessonSegments.id }).from(lessonSegments).where(eq(lessonSegments.lessonId, lessonId));
++  const [t] = await db.select({ id: segmentTranslations.id }).from(segmentTranslations).where(inArray(segmentTranslations.segmentId, segs)).limit(1);
++  if (t) return true;
++  const [c] = await db
++    .select({ id: ttsClips.id })
++    .from(ttsClips)
++    .where(and(inArray(ttsClips.segmentId, segs), ne(ttsClips.qcStatus, "superseded")))
++    .limit(1);
++  return !!c;
++}
+-- 
+2.43.0
+

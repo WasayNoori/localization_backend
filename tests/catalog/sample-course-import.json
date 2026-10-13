@@ -1,0 +1,60 @@
+{
+  "id": "SW-PART-MODELING-101",
+  "courseName": "SOLIDWORKS Part Modeling Fundamentals",
+  "status": "Draft",
+  "sections": [
+    {
+      "sectionIndex": 1,
+      "title": "Getting Started",
+      "lessons": [
+        {
+          "id": "SW101-L01",
+          "lessonName": "Introduction to the SOLIDWORKS Interface",
+          "description": "Tour of the FeatureManager design tree, CommandManager, and graphics area.",
+          "scriptText": "Welcome to SOLIDWORKS Part Modeling Fundamentals. In this lesson, we'll take a tour of the SOLIDWORKS user interface so you know where everything is before we start modeling. On the left side of the screen is the FeatureManager design tree. It lists every feature in the part, in the order it was created. Across the top is the CommandManager, which groups tools into tabs such as Features, Sketch, and Evaluate. The large area in the middle is the graphics area, where you'll see and interact with your model. Finally, the heads-up view toolbar at the top of the graphics area lets you change how the model is displayed. Take a moment to click through each tab of the CommandManager before moving on."
+        },
+        {
+          "id": "SW101-L02",
+          "lessonName": "Creating a New Part and Setting Units",
+          "description": "Start a new part document and configure the unit system.",
+          "scriptText": "In this lesson, we'll create a new part and make sure it uses the right units. Click New on the menu bar, select Part, and click OK. Before sketching anything, check the unit system in the lower right corner of the status bar. Click it and choose MMGS, which stands for millimeter, gram, second. Setting units first prevents surprises later, because dimensions you enter will be interpreted in this system. Save the part now with a descriptive name so you can find it again."
+        }
+      ]
+    },
+    {
+      "sectionIndex": 2,
+      "title": "Sketching Basics",
+      "lessons": [
+        {
+          "id": "SW101-L03",
+          "lessonName": "Sketching Lines and Rectangles",
+          "description": "Basic 2D sketch entities on a reference plane.",
+          "scriptText": "Every solid feature starts with a sketch. Select the Front Plane in the FeatureManager design tree, then click Sketch on the CommandManager. Choose the Corner Rectangle tool and click once at the origin to start the rectangle. Move the cursor and click again to finish it. Notice the lines are blue, which means the sketch is under defined. Next, use the Line tool to add a short line from one corner. Press Escape to exit the tool when you're done."
+        },
+        {
+          "id": "SW101-L04",
+          "lessonName": "Dimensions and Relations",
+          "description": "Fully define a sketch with Smart Dimension and geometric relations.",
+          "scriptText": "A sketch should be fully defined before you build a feature from it. Select Smart Dimension, click the top edge of the rectangle, and type 100. Then dimension the side edge and type 50. Now add a relation: hold Control, select the short line and the bottom edge, and choose Parallel from the context toolbar. When every line turns black, the sketch is fully defined. Fully defined sketches behave predictably when you change dimensions later."
+        }
+      ]
+    },
+    {
+      "sectionIndex": 3,
+      "title": "Building Features",
+      "lessons": [
+        {
+          "id": "SW101-L05",
+          "lessonName": "Extruded Boss and Cut",
+          "description": "Turn a 2D sketch into a solid, then remove material.",
+          "scriptText": "With a fully defined sketch selected, click Extruded Boss Base on the Features tab. Set the depth to 25 millimeters and click OK. You now have a solid block. To remove material, sketch a circle on the top face and dimension it to 20 millimeters. Click Extruded Cut, choose Through All for the end condition, and click OK. The hole now passes completely through the part. Both features appear in the FeatureManager design tree, in the order you created them."
+        },
+        {
+          "id": "SW101-L06",
+          "lessonName": "Fillets and Chamfers",
+          "description": "Round and bevel edges to finish the part."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,280 @@
+From e51640957560a46edced600d2e74caec24979d83 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 7 Oct 2026 19:11:08 -0700
+Subject: [PATCH] =?UTF-8?q?Output=20layout:=20language=20folders=20are=20t?=
+ =?UTF-8?q?he=20two-letter=20code=20(FR/25Sim01=5F01/French=20Clips/?=
+ =?UTF-8?q?=E2=80=A6),=20local=20and=20Box?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ docs/decisions.md                           | 12 ++++++++++--
+ docs/endpoints-guide.md                     |  6 +++---
+ docs/pipeline-flow.md                       |  2 +-
+ docs/rationale/schema-guide.md              |  2 +-
+ src/config/languages.ts                     |  2 +-
+ src/db/schema.ts                            |  2 +-
+ src/interfaces/ILessonOutputStore.ts        |  4 ++--
+ src/routes/courses.route.ts                 |  4 ++--
+ src/routes/lessons.route.ts                 |  2 +-
+ src/scripts/generate-audio.ts               |  2 +-
+ src/scripts/write-segments.ts               |  2 +-
+ src/services/output/BoxClipStore.ts         |  2 +-
+ src/services/output/LocalFolderClipStore.ts |  4 ++--
+ src/services/output/outputLayout.ts         | 11 +++++++----
+ 14 files changed, 34 insertions(+), 23 deletions(-)
+
+diff --git a/docs/decisions.md b/docs/decisions.md
+index 0c52094..a86e8e6 100644
+--- a/docs/decisions.md
++++ b/docs/decisions.md
+@@ -566,8 +566,8 @@ Supersedes "Generate's boxFolderId falls back to BOX_AUDIO_FOLDER_ID" and
+ the flat `<requestId>.mp3` upload. Each course has a top-level Box folder
+ (`courses.box_folder_id`, set on the course page or in the import JSON).
+ Clips and Segments.txt go under it exactly as in the local folder:
+-`<Language>/<lessonId>/<Language> Segments.txt` and
+-`<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3` — one
++`<LANG>/<lessonId>/<Language> Segments.txt` and
++`<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3` — one
+ layout definition (`outputLayout.ts`) serves both. Folders are found or
+ created (children listed once and cached). A file whose name already exists
+ is uploaded as a new version (same Box file id, history kept); identical
+@@ -578,6 +578,14 @@ a developer token remains as a testing fallback. Course-level audio is a
+ processing job (`POST /courses/:id/localizations/:lang/generate`), started
+ and watched from the course page.
+ 
++## Language folders are the two-letter code
++Output layout (local and Box): `<course>/<LANG>/<lessonId>/<Language> Segments.txt`
++and `<LANG>/<lessonId>/<Language> Clips/…` — e.g. `FR/25Sim01_01/French Clips/`.
++The language folder is the upper-case code to match the team's Box
++convention; file and Clips-folder names keep the full language name.
++Defined once in `outputLayout.languageFolder`. Clips generated locally before
++this (POC) keep their recorded `local_path` with the old "French/" folder.
++
+ ## Open questions (not yet settled)
+ - Do failed/superseded `tts_clips` attempts get deleted after a retention
+   window, or kept indefinitely for audit?
+diff --git a/docs/endpoints-guide.md b/docs/endpoints-guide.md
+index 3c7da7b..27eca2e 100644
+--- a/docs/endpoints-guide.md
++++ b/docs/endpoints-guide.md
+@@ -56,7 +56,7 @@ Sync — `writeCourseSegmentsFiles`
+ `LOCAL_OUTPUT_ROOT`). Body `{ languages: ["en","fr",…], courseFolder? }`
+ (`courseFolder` relative to the root, default the course name; `..` and
+ absolute paths → 400). Writes, per parsed lesson and language,
+-`<courseFolder>/<Language>/<lessonId>/<Language> Segments.txt`: blocks of
++`<courseFolder>/<LANG>/<lessonId>/<Language> Segments.txt`: blocks of
+ `001` + text, blank line between, CRLF, UTF-8 — numbers match the future
+ clip names `<Language> Clips/<lessonId>_<lang>_001.mp3`. A translated file
+ is written only when every segment is translated; otherwise listed in
+@@ -355,7 +355,7 @@ consistent while each translation still maps 1:1 to its segment.
+ ## `POST /lessons/:lessonId/localizations/:targetLanguage/generate`
+ 
+ Clips go to the course's Box folder (`courses.box_folder_id`) in the course
+-layout: `<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3`.
++layout: `<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3`.
+ Body `courseId` picks the course when the lesson is in more than one; 400 if
+ the lesson's course has no Box folder. (Replaces the old `boxFolderId` /
+ `BOX_AUDIO_FOLDER_ID` flat-folder upload.)
+@@ -511,7 +511,7 @@ persisted pipeline path.
+ - `boxFolderId` (numeric) is the course's top-level Box folder; also accepted by `POST /courses/import` (omit = unchanged) and returned by `GET /courses/:courseId`.
+ 
+ ### Course audio job
+-- `POST /courses/:courseId/localizations/:targetLanguage/generate` → `202 { jobId, job }`. For one language (`en` too), into the course's Box folder: writes `<Language> Segments.txt` per lesson (unchanged files skipped), then every missing clip (`<Language>/<lessonId>/<Language> Clips/…`). Lessons not fully translated are skipped (no DeepL). Re-running continues. Progress: `succeeded`, `failed`, `skipped`, `stats { segmentFiles, clips, characters }`. 400 no Box folder / no voice, 404, 409 active job.
++- `POST /courses/:courseId/localizations/:targetLanguage/generate` → `202 { jobId, job }`. For one language (`en` too), into the course's Box folder: writes `<Language> Segments.txt` per lesson (unchanged files skipped), then every missing clip (`<LANG>/<lessonId>/<Language> Clips/…`). Lessons not fully translated are skipped (no DeepL). Re-running continues. Progress: `succeeded`, `failed`, `skipped`, `stats { segmentFiles, clips, characters }`. 400 no Box folder / no voice, 404, 409 active job.
+ - `GET /courses/:courseId/jobs` — the course's latest 20 jobs (translate + generate), newest first, so a page can resume polling.
+ 
+ ### Box status
+diff --git a/docs/pipeline-flow.md b/docs/pipeline-flow.md
+index e3ecfca..33f49d4 100644
+--- a/docs/pipeline-flow.md
++++ b/docs/pipeline-flow.md
+@@ -55,7 +55,7 @@ jobs. Loading + parsing a whole course's scripts is a CLI for now
+ 
+ After translation, `POST /courses/:courseId/outputs/segments` (or `npm run
+ outputs:segments`) writes `<Language> Segments.txt` per lesson under
+-`LOCAL_OUTPUT_ROOT/<courseFolder>/<Language>/<lessonId>/`. Audio lands
++`LOCAL_OUTPUT_ROOT/<courseFolder>/<LANG>/<lessonId>/`. Audio lands
+ beside it in `<Language> Clips/` (POC, until Box is registered):
+ 
+ ```
+diff --git a/docs/rationale/schema-guide.md b/docs/rationale/schema-guide.md
+index a1d3c3e..046a08f 100644
+--- a/docs/rationale/schema-guide.md
++++ b/docs/rationale/schema-guide.md
+@@ -505,7 +505,7 @@ Open design questions have moved to `docs/decisions.md`, per this file's own
+ rule against embedding unresolved questions here.
+ ## `courses.box_folder_id`
+ Top-level Box folder per course (numeric id, nullable). Audio and Segments.txt
+-go under it as `<Language>/<lessonId>/<Language> Clips/` — the same layout as
++go under it as `<LANG>/<lessonId>/<Language> Clips/` — the same layout as
+ the local output folder. Set on the course page, via `PATCH /courses/:id`, or
+ in the import JSON.
+ 
+diff --git a/src/config/languages.ts b/src/config/languages.ts
+index 49801b7..4fb1206 100644
+--- a/src/config/languages.ts
++++ b/src/config/languages.ts
+@@ -1,6 +1,6 @@
+ // src/config/languages.ts
+ // English names for language codes — used in prompts (Claude reviewer) and
+-// as folder names in the output layout (e.g. "French/25Sim01_01/French Clips").
++// in output file and folder names (e.g. "FR/25Sim01_01/French Clips"); the language folder itself is the code.
+ // Codes are lowercase, as stored everywhere else.
+ 
+ export const LANGUAGE_NAMES: Readonly<Record<string, string>> = {
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 8b70e52..bb4fe7c 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -27,7 +27,7 @@ export const courses = pgTable("courses", {
+   status: text("status"),
+   lcmsCourseId: text("lcms_course_id").unique(),
+   // Top-level Box folder for this course's outputs. The pipeline creates
+-  // <Language>/<lessonId>/<Language> Clips/ under it. Null = not set (audio
++  // <LANG>/<lessonId>/<Language> Clips/ under it. Null = not set (audio
+   // can't go to Box for this course yet).
+   boxFolderId: text("box_folder_id"),
+   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+diff --git a/src/interfaces/ILessonOutputStore.ts b/src/interfaces/ILessonOutputStore.ts
+index 83cbf16..f89116e 100644
+--- a/src/interfaces/ILessonOutputStore.ts
++++ b/src/interfaces/ILessonOutputStore.ts
+@@ -9,8 +9,8 @@ export interface LessonOutputTarget {
+ 
+ /**
+  * Where finished lesson outputs go, in the course folder layout:
+- *   <courseFolder>/<Language>/<lessonId>/<Language> Segments.txt
+- *   <courseFolder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_<NNN>.mp3
++ *   <courseFolder>/<LANG>/<lessonId>/<Language> Segments.txt
++ *   <courseFolder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_<NNN>.mp3
+  * A local folder for now (LocalFolderLessonOutputStore); Box later, same layout.
+  */
+ export interface ILessonOutputStore {
+diff --git a/src/routes/courses.route.ts b/src/routes/courses.route.ts
+index 0c1805c..12b1bda 100644
+--- a/src/routes/courses.route.ts
++++ b/src/routes/courses.route.ts
+@@ -395,7 +395,7 @@ export async function coursesRoute(app: FastifyInstance) {
+         description:
+           "Course-level audio job for one language ('en' included), into the course's Box folder: writes " +
+           "'<Language> Segments.txt' per lesson (unchanged files skipped), then generates every missing clip " +
+-          "with the language's voice settings — <Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3. " +
++          "with the language's voice settings — <LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3. " +
+           "Lessons not fully translated are skipped (never calls DeepL). Async — 202 { jobId }; poll " +
+           "GET /jobs/:jobId (progress: succeeded, failed, skipped, stats { segmentFiles, clips, characters }). " +
+           "Re-running continues where it stopped. 400 no Box folder / no voice for the language, 404 unknown " +
+@@ -444,7 +444,7 @@ export async function coursesRoute(app: FastifyInstance) {
+       schema: {
+         description:
+           "Writes '<Language> Segments.txt' for every parsed lesson, per language, into the course folder " +
+-          "under LOCAL_OUTPUT_ROOT: <courseFolder>/<Language>/<lessonId>/<Language> Segments.txt. 'en' = the " +
++          "under LOCAL_OUTPUT_ROOT: <courseFolder>/<LANG>/<lessonId>/<Language> Segments.txt. 'en' = the " +
+           "English segments. Numbered 001, 002… (matches future clip names). A translated file is only " +
+           "written when every segment is translated — otherwise listed in skipped. courseFolder is relative " +
+           "(default: the course name). Overwrites existing files. 400 if LOCAL_OUTPUT_ROOT isn't set.",
+diff --git a/src/routes/lessons.route.ts b/src/routes/lessons.route.ts
+index e0323d3..50368bf 100644
+--- a/src/routes/lessons.route.ts
++++ b/src/routes/lessons.route.ts
+@@ -195,7 +195,7 @@ export async function lessonsRoute(app: FastifyInstance) {
+           "lesson to already be parsed. To retranslate a single segment without paying for audio " +
+           "regeneration, use POST /segments/:segmentId/translations/:targetLanguage/retranslate instead, " +
+           "then call this with segmentId + force once satisfied. Clips go to the course's Box folder " +
+-          "(<Language>/<lessonId>/<Language> Clips/); pass courseId when the lesson is in more than one course.",
++          "(<LANG>/<lessonId>/<Language> Clips/); pass courseId when the lesson is in more than one course.",
+         security: [{ apiKey: [] }],
+         params: {
+           type: "object",
+diff --git a/src/scripts/generate-audio.ts b/src/scripts/generate-audio.ts
+index 35e3715..0d2d6e8 100644
+--- a/src/scripts/generate-audio.ts
++++ b/src/scripts/generate-audio.ts
+@@ -2,7 +2,7 @@
+ //
+ // POC (until the Box app is registered): generates missing audio for a
+ // course and saves the clips locally, in the course folder layout:
+-// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3
++// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3
+ // tts_clips.local_path records each file; box_file_id is backfilled later.
+ //
+ //   npm run audio:generate -- 25Sim "SOLIDWORKS Simulation\SOLIDWORKS Simulation" fr es it
+diff --git a/src/scripts/write-segments.ts b/src/scripts/write-segments.ts
+index 311145c..9344c6e 100644
+--- a/src/scripts/write-segments.ts
++++ b/src/scripts/write-segments.ts
+@@ -1,7 +1,7 @@
+ // src/scripts/write-segments.ts
+ //
+ // Same as POST /courses/:courseId/outputs/segments: writes
+-// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<Language>/<lessonId>/<Language> Segments.txt
++// <LOCAL_OUTPUT_ROOT>/<courseFolder>/<LANG>/<lessonId>/<Language> Segments.txt
+ //
+ //   npm run outputs:segments -- 25Sim "SOLIDWORKS Simulation\SOLIDWORKS Simulation" en fr es it
+ 
+diff --git a/src/services/output/BoxClipStore.ts b/src/services/output/BoxClipStore.ts
+index 585ccea..b1c43dc 100644
+--- a/src/services/output/BoxClipStore.ts
++++ b/src/services/output/BoxClipStore.ts
+@@ -5,7 +5,7 @@ import { clipFileName, clipsDirInCourse } from "./outputLayout.js";
+ 
+ /**
+  * Saves clips to Box under the course's folder, in the same layout as the
+- * local folder: <course folder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3.
++ * local folder: <course folder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3.
+  * Folders are created as needed; a regenerated clip becomes a new version of
+  * the same Box file. `destination.boxFolderId` is the course's top-level folder.
+  */
+diff --git a/src/services/output/LocalFolderClipStore.ts b/src/services/output/LocalFolderClipStore.ts
+index 74bd32a..f9cccf0 100644
+--- a/src/services/output/LocalFolderClipStore.ts
++++ b/src/services/output/LocalFolderClipStore.ts
+@@ -5,10 +5,10 @@ import { clipFilePath } from "./outputLayout.js";
+ 
+ /**
+  * POC: saves clips into the local course folder layout
+- * (<courseFolder>/<Language>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3)
++ * (<courseFolder>/<LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3)
+  * until the Box app is registered. box_file_id stays null; local_path is
+  * what a later Box upload backfills from — stored relative to the output
+- * root ("SOLIDWORKS Simulation/French/25Sim01_01/French Clips/25Sim01_01_fr_001.mp3"),
++ * root ("SOLIDWORKS Simulation/FR/25Sim01_01/French Clips/25Sim01_01_fr_001.mp3"),
+  * so it reads the same whichever machine or shell ran the generation.
+  */
+ export class LocalFolderClipStore implements IClipStore {
+diff --git a/src/services/output/outputLayout.ts b/src/services/output/outputLayout.ts
+index 4e5b744..faca77d 100644
+--- a/src/services/output/outputLayout.ts
++++ b/src/services/output/outputLayout.ts
+@@ -18,20 +18,23 @@ export function courseFolderParts(courseFolder: string): string[] {
+ /** Everything below the course folder — the same in the local folder and in Box. */
+ export type LessonInCourse = Pick<LessonOutputTarget, "language" | "lessonId">;
+ 
+-/** e.g. ["French", "25Sim01_01"] */
+-export const lessonDirInCourse = (t: LessonInCourse): string[] => [languageName(t.language), t.lessonId];
++/** Language folder: the two-letter code, upper case ("FR"). Names inside stay full ("French Clips"). */
++export const languageFolder = (language: string): string => language.toUpperCase();
++
++/** e.g. ["FR", "25Sim01_01"] */
++export const lessonDirInCourse = (t: LessonInCourse): string[] => [languageFolder(t.language), t.lessonId];
+ 
+ /** e.g. "French Segments.txt" — lives in the lesson folder. */
+ export const segmentsFileName = (t: LessonInCourse): string => `${languageName(t.language)} Segments.txt`;
+ 
+-/** e.g. ["French", "25Sim01_01", "French Clips"] */
++/** e.g. ["FR", "25Sim01_01", "French Clips"] */
+ export const clipsDirInCourse = (t: LessonInCourse): string[] => [...lessonDirInCourse(t), `${languageName(t.language)} Clips`];
+ 
+ /** e.g. "25Sim01_01_fr_001.mp3" — numbered like the segments file. */
+ export const clipFileName = (t: LessonInCourse, segmentNumber: number): string =>
+   `${t.lessonId}_${t.language}_${String(segmentNumber).padStart(3, "0")}.mp3`;
+ 
+-/** e.g. ["SOLIDWORKS Simulation", "French", "25Sim01_01", "French Segments.txt"] */
++/** e.g. ["SOLIDWORKS Simulation", "FR", "25Sim01_01", "French Segments.txt"] */
+ export const segmentsFilePath = (t: LessonOutputTarget): string[] => [
+   ...courseFolderParts(t.courseFolder),
+   ...lessonDirInCourse(t),
+-- 
+2.43.0
+

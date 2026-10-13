@@ -1,0 +1,1 @@
+{"version":3,"file":"IvoiceSettingsProvider.js","sourceRoot":"","sources":["../../../../home/claude/localization_backend/src/interfaces/IvoiceSettingsProvider.ts"],"names":[],"mappings":"AAUA,MAAM,OAAO,uBAAwB,SAAQ,KAAK;IACpB;IAA5B,YAA4B,QAAgB;QAC1C,KAAK,CAAC,4BAA4B,QAAQ,0CAA0C,QAAQ,kBAAkB,CAAC,CAAC;QADtF,aAAQ,GAAR,QAAQ,CAAQ;IAE5C,CAAC;CACF"}

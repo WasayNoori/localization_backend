@@ -1,0 +1,38 @@
+From e24cb251c999c526385ec7026b30f62432a20cca Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 09:17:59 -0700
+Subject: [PATCH] writeCourseSegmentsFiles: optional lessonIds (one-lesson test
+ runs)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019SfrJH4SbgPjULJKHTAFnx
+---
+ src/services/output/writeCourseSegmentsFiles.ts | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/services/output/writeCourseSegmentsFiles.ts b/src/services/output/writeCourseSegmentsFiles.ts
+index a24cb65..d105650 100644
+--- a/src/services/output/writeCourseSegmentsFiles.ts
++++ b/src/services/output/writeCourseSegmentsFiles.ts
+@@ -31,7 +31,7 @@ export class WriteSegmentsError extends Error {
+ export async function writeCourseSegmentsFiles(
+   deps: { db: Database; outputStore: ILessonOutputStore },
+   courseId: string,
+-  options: { languages: string[]; courseFolder?: string }
++  options: { languages: string[]; courseFolder?: string; /** Only these lessons (default: the whole course). */ lessonIds?: string[] }
+ ): Promise<WriteSegmentsResult> {
+   const { db } = deps;
+   const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
+@@ -46,7 +46,8 @@ export async function writeCourseSegmentsFiles(
+   }
+ 
+   const result: WriteSegmentsResult = { courseFolder, written: [], skipped: [] };
+-  for (const lessonId of await courseLessonOrder(db, courseId)) {
++  const only = options.lessonIds?.length ? new Set(options.lessonIds) : null;
++  for (const lessonId of (await courseLessonOrder(db, courseId)).filter((id) => !only || only.has(id))) {
+     const segments = await db
+       .select({ id: lessonSegments.id, text: lessonSegments.text })
+       .from(lessonSegments)
+-- 
+2.43.0
+

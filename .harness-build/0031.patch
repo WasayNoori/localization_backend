@@ -1,0 +1,312 @@
+From 64e386975934db0950320ce384f9d268c281e0a0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 09:21:25 -0700
+Subject: [PATCH 31/31] Monday outline import module: sections and lessons from
+ the course's Monday board (preview/confirm via the structure import)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019SfrJH4SbgPjULJKHTAFnx
+---
+ docs/decisions.md                             |   9 ++
+ docs/endpoints-guide.md                       |   6 +
+ src/app.ts                                    |   3 +
+ src/modules/monday-outline/README.md          |  16 ++
+ src/modules/monday-outline/index.ts           |   9 ++
+ .../monday-outline/mondayOutline.route.ts     |  48 ++++++
+ .../monday-outline/readMondayOutline.ts       | 138 ++++++++++++++++++
+ 7 files changed, 229 insertions(+)
+ create mode 100644 src/modules/monday-outline/README.md
+ create mode 100644 src/modules/monday-outline/index.ts
+ create mode 100644 src/modules/monday-outline/mondayOutline.route.ts
+ create mode 100644 src/modules/monday-outline/readMondayOutline.ts
+
+diff --git a/docs/decisions.md b/docs/decisions.md
+index 81b36ec..4ce0ba3 100644
+--- a/docs/decisions.md
++++ b/docs/decisions.md
+@@ -653,3 +653,12 @@ deleting the folder and that line. Built in code rather than as a Claude skill
+ because it must run unattended, repeatably, with the glossary/formality/Box/job
+ machinery the backend already has. The only schema change is
+ courses.monday_board_id — general course data, kept if the module goes.
++
++## Course outline can be imported from Monday (one-way, on demand)
++src/modules/monday-outline reads the course board's "Section N - Title" groups and
++feeds the existing structure import (same preview/confirm, same rules) — no
++second import path. One-way and user-triggered, not a sync, because the BI app
++may own course metadata later. Monday item names and course ids can differ in
++casing, so lesson ids resolve as: existing lesson (case-insensitive) → course-id
++prefix recased → as is (reported). Monday access is the shared
++IMondayBoardReader, also used by the quiz module.
+diff --git a/docs/endpoints-guide.md b/docs/endpoints-guide.md
+index 9d75533..0b0b78e 100644
+--- a/docs/endpoints-guide.md
++++ b/docs/endpoints-guide.md
+@@ -529,3 +529,9 @@ Interim; see `src/modules/quiz/README.md`. Stores nothing about quizzes.
+ - `GET /courses/:courseId/quiz` → `{ courseId, source, questions, byStatus, withoutQuestionText, lessonsNotInCourse }`. Reads the course's Monday board ("Quiz Questions" group) live; nothing is translated. 400 no Monday board / board unreadable, 404.
+ - `POST /courses/:courseId/quiz/translations/:targetLanguage` `{ review?: boolean (default true) }` → `202 { jobId, job }` (type `quiz`, queued per course). Every question is translated (question + options in one DeepL request, glossary + formality; TRUE/FALSE fixed words), optionally checked by Claude, and written to `<LANG>/Quiz Questions/<courseId> Quiz Questions <LANG>.xlsx` in the course's Box folder, replacing the previous file. Progress: `stats { questions, translated, characters, flagged }`, `notes` (flagged questions), `options { file, fileId }`. 400 `en` / no Monday board / no Box folder, 404, 409 already running.
+ - Course details (`POST /courses`, `PATCH /courses/:courseId`, `POST /courses/import`) accept `mondayBoardId` (numeric; `""` clears); `GET /courses/:courseId` returns it.
++
++---
++
++## Monday outline module (detachable) — `src/modules/monday-outline`
++
++- `POST /courses/:courseId/import/monday` (`?dryRun=true` previews) → the `POST /courses/import` result plus `monday { board, sections, lessons, idChanges[], idsNotMatchingCourse[], skippedGroups[], skippedItems[] }`. Reads the course's Monday board: groups `Section N - Title` → sections, their items → lessons (item name = lesson id; Lesson Name, Lesson Description, Lesson Level Tags). Lesson-id casing: existing lesson (case-insensitive) keeps its id → else course-id prefix recased → else as is. Course name/description/status unchanged. 400 no Monday board / unreadable / no section groups / invalid structure, 404.
+diff --git a/src/app.ts b/src/app.ts
+index 1cdf37b..0800b02 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -4,6 +4,7 @@ import { auth } from "./plugins/auth.js";
+ import { swaggerDocs } from "./plugins/swagger.js";
+ import { routes } from "./routes/index.js";
+ import { quizModule } from "./modules/quiz/index.js";
++import { mondayOutlineModule } from "./modules/monday-outline/index.js";
+ 
+ export async function buildApp(): Promise<FastifyInstance> {
+   const app = Fastify({ logger: true });
+@@ -14,6 +15,8 @@ export async function buildApp(): Promise<FastifyInstance> {
+   await app.register(routes);
+   // Detachable module: remove this line and src/modules/quiz to take quiz translation out.
+   await app.register(quizModule);
++  // Detachable module: remove this line and src/modules/monday-outline to take it out.
++  await app.register(mondayOutlineModule);
+ 
+   return app;
+ }
+diff --git a/src/modules/monday-outline/README.md b/src/modules/monday-outline/README.md
+new file mode 100644
+index 0000000..25795f0
+--- /dev/null
++++ b/src/modules/monday-outline/README.md
+@@ -0,0 +1,16 @@
++# Monday outline import (detachable)
++
++Imports a course's sections and lessons from its monday.com board (`courses.monday_board_id`) — a one-way import
++you trigger, not a sync (the BI app may own course metadata later).
++
++- Groups named `Section N - Title` → sections (N = section index). Other groups (e.g. "Quiz Questions") are ignored.
++- Items in those groups → lessons: item name = lesson id; columns **Lesson Name** (required), **Lesson Description**,
++  **Lesson Level Tags** (comma-separated), found by title. Lessons sorted by id within a section (numeric-aware).
++- Lesson id casing (Monday and the course id may differ): an existing lesson matching ignoring case keeps its id;
++  else an id starting with the course id (any case) takes the course id's casing; else kept as is and reported.
++- Then the regular structure import (`importCourseStructure`) — same rules, same `dryRun` preview. Course name,
++  description and status are left as stored. Scripts aren't touched.
++
++Endpoint: `POST /courses/:courseId/import/monday?dryRun=true|false`.
++Uses the shared `IMondayBoardReader` (`app.mondayBoardReader`).
++To remove: delete this folder and its line in `src/app.ts` (frontend: the "Monday board" mode on the Import page).
+diff --git a/src/modules/monday-outline/index.ts b/src/modules/monday-outline/index.ts
+new file mode 100644
+index 0000000..a455711
+--- /dev/null
++++ b/src/modules/monday-outline/index.ts
+@@ -0,0 +1,9 @@
++// src/modules/monday-outline/index.ts
++// Monday outline import — detachable (see README.md). Plugged in with one line
++// in app.ts: `await app.register(mondayOutlineModule)`.
++import type { FastifyInstance } from "fastify";
++import { mondayOutlineRoutes } from "./mondayOutline.route.js";
++
++export async function mondayOutlineModule(app: FastifyInstance): Promise<void> {
++  await app.register(mondayOutlineRoutes);
++}
+diff --git a/src/modules/monday-outline/mondayOutline.route.ts b/src/modules/monday-outline/mondayOutline.route.ts
+new file mode 100644
+index 0000000..d6cfa30
+--- /dev/null
++++ b/src/modules/monday-outline/mondayOutline.route.ts
+@@ -0,0 +1,48 @@
++// src/modules/monday-outline/mondayOutline.route.ts
++import { eq } from "drizzle-orm";
++import type { FastifyInstance } from "fastify";
++import { courses } from "../../db/schema.js";
++import { MondayApiError } from "../../interfaces/IMondayBoardReader.js";
++import { CourseImportValidationError, importCourseStructure } from "../../services/catalog/importCourseStructure.js";
++import { MondayOutlineError, readMondayOutline } from "./readMondayOutline.js";
++
++export async function mondayOutlineRoutes(app: FastifyInstance) {
++  app.post(
++    "/courses/:courseId/import/monday",
++    {
++      schema: {
++        description:
++          "Monday outline module — imports the course's sections and lessons from its Monday board: groups " +
++          "\"Section N - Title\" become sections, their items lessons (item name = lesson id; Lesson Name, Lesson " +
++          "Description, Lesson Level Tags). Lesson ids: an existing lesson matching ignoring case keeps its id; " +
++          "otherwise a course-id prefix gets the course id's casing; otherwise kept as is (reported). Then the " +
++          "same import as POST /courses/import — `?dryRun=true` previews. Returns the import result plus `monday` " +
++          "(what was read, id changes, skipped groups/items). Course name/description/status unchanged. " +
++          "400 no Monday board / board unreadable / invalid structure, 404 unknown course.",
++        tags: ["monday-outline"],
++        security: [{ apiKey: [] }],
++        params: { type: "object", required: ["courseId"], properties: { courseId: { type: "string" } } },
++        querystring: { type: "object", properties: { dryRun: { type: "boolean" } } },
++      },
++    },
++    async (request, reply) => {
++      const { courseId } = request.params as { courseId: string };
++      const { dryRun } = request.query as { dryRun?: boolean };
++      const [course] = await app.db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
++      if (!course) return reply.code(404).send({ error: "NotFound", message: `No course with id "${courseId}"` });
++      try {
++        const { input, report } = await readMondayOutline({ db: app.db, monday: app.mondayBoardReader }, course);
++        if (!input.sections.length) {
++          return reply.code(400).send({ error: "BadRequest", message: `No "Section N - Title" groups on Monday board ${report.board}` });
++        }
++        const result = await importCourseStructure(app.db, input, { dryRun });
++        return reply.send({ ...result, monday: report });
++      } catch (err) {
++        if (err instanceof MondayOutlineError || err instanceof MondayApiError || err instanceof CourseImportValidationError) {
++          return reply.code(400).send({ error: "BadRequest", message: err.message });
++        }
++        throw err;
++      }
++    }
++  );
++}
+diff --git a/src/modules/monday-outline/readMondayOutline.ts b/src/modules/monday-outline/readMondayOutline.ts
+new file mode 100644
+index 0000000..62b04d1
+--- /dev/null
++++ b/src/modules/monday-outline/readMondayOutline.ts
+@@ -0,0 +1,138 @@
++// src/modules/monday-outline/readMondayOutline.ts
++import { sql } from "drizzle-orm";
++import type { Database } from "../../db/client.js";
++import { lessons } from "../../db/schema.js";
++import type { IMondayBoardReader } from "../../interfaces/IMondayBoardReader.js";
++import { cellText, columnIdByTitle } from "../../services/monday/MondayBoardReader.js";
++import type { ImportCourseInput, ImportLessonInput } from "../../services/catalog/importCourseStructure.js";
++
++/** Section groups on course boards: "Section 3 - Defeaturing & Geometry Simplification" (dash, en dash or colon). */
++const SECTION_GROUP = /^\s*section\s+(\d+)\s*[-–:]\s*(.+?)\s*$/i;
++
++export interface OutlineCourse {
++  id: string;
++  courseName: string;
++  mondayBoardId: string | null;
++}
++
++/** What was read and how Monday's names became lesson ids — shown in the preview. */
++export interface MondayOutlineReport {
++  board: string;
++  sections: number;
++  lessons: number;
++  /** Monday item names stored under a different id (casing). */
++  idChanges: { monday: string; lessonId: string; reason: "existing lesson" | "course id prefix" }[];
++  /** Item names that don't start with the course id — kept exactly as in Monday. */
++  idsNotMatchingCourse: string[];
++  /** Groups that aren't sections (e.g. "Quiz Questions"). */
++  skippedGroups: string[];
++  skippedItems: { name: string; reason: string }[];
++}
++
++export class MondayOutlineError extends Error {}
++
++/**
++ * Turns the course's Monday board into the structure import's input:
++ * groups "Section N - Title" → sections (N = sectionIndex), their items →
++ * lessons (item name = lesson id; Lesson Name, Lesson Description, Lesson
++ * Level Tags columns, found by title). Other groups are ignored.
++ *
++ * Lesson ids, since Monday's casing may differ from the course id's:
++ *   1. an existing lesson with the same id ignoring case keeps its id (no duplicates);
++ *   2. otherwise an id starting with the course id (any casing) gets the course id's casing;
++ *   3. otherwise the Monday name is kept as is (reported).
++ * Course name, description and status are left as stored.
++ */
++export async function readMondayOutline(
++  deps: { db: Database; monday: IMondayBoardReader },
++  course: OutlineCourse
++): Promise<{ input: ImportCourseInput; report: MondayOutlineReport }> {
++  if (!course.mondayBoardId) throw new MondayOutlineError(`Course "${course.id}" has no Monday board — set it on the course's Edit details page`);
++  const board = await deps.monday.readBoard(course.mondayBoardId);
++  const col = {
++    name: columnIdByTitle(board, "Lesson Name"),
++    description: columnIdByTitle(board, "Lesson Description"),
++    tags: columnIdByTitle(board, "Lesson Level Tags"),
++  };
++  if (!col.name) throw new MondayOutlineError(`Monday board "${board.name}" has no "Lesson Name" column`);
++
++  const report: MondayOutlineReport = {
++    board: `${board.name} (${board.id})`,
++    sections: 0,
++    lessons: 0,
++    idChanges: [],
++    idsNotMatchingCourse: [],
++    skippedGroups: [],
++    skippedItems: [],
++  };
++
++  // Read the section groups.
++  const sectionGroups: { index: number; title: string; items: Awaited<ReturnType<IMondayBoardReader["readGroupItems"]>> }[] = [];
++  for (const group of board.groups) {
++    const m = SECTION_GROUP.exec(group.title);
++    if (!m) {
++      report.skippedGroups.push(group.title);
++      continue;
++    }
++    sectionGroups.push({ index: Number(m[1]), title: m[2], items: await deps.monday.readGroupItems(board.id, group.id) });
++  }
++
++  // Existing lessons that match any Monday name ignoring case keep their stored id.
++  const names = sectionGroups.flatMap((g) => g.items.map((i) => i.name.trim())).filter(Boolean);
++  const lowered = [...new Set(names.map((n) => n.toLowerCase()))];
++  const existing = lowered.length
++    ? await deps.db.select({ id: lessons.id }).from(lessons).where(sql`lower(${lessons.id}) in ${lowered}`)
++    : [];
++  const existingByLower = new Map(existing.map((l) => [l.id.toLowerCase(), l.id]));
++  const prefix = course.id.toLowerCase();
++
++  const lessonIdFor = (name: string): string => {
++    const found = existingByLower.get(name.toLowerCase());
++    if (found) {
++      if (found !== name) report.idChanges.push({ monday: name, lessonId: found, reason: "existing lesson" });
++      return found;
++    }
++    if (name.toLowerCase().startsWith(prefix)) {
++      const id = course.id + name.slice(course.id.length);
++      if (id !== name) report.idChanges.push({ monday: name, lessonId: id, reason: "course id prefix" });
++      return id;
++    }
++    report.idsNotMatchingCourse.push(name);
++    return name;
++  };
++
++  const sections: ImportCourseInput["sections"] = sectionGroups
++    .sort((a, b) => a.index - b.index)
++    .map((g) => {
++      const sectionLessons: ImportLessonInput[] = [];
++      for (const item of g.items) {
++        const name = item.name.trim();
++        const lessonName = cellText(item, col.name);
++        if (!name) {
++          report.skippedItems.push({ name: `(unnamed item ${item.id})`, reason: "no lesson id (item name)" });
++          continue;
++        }
++        if (!lessonName) {
++          report.skippedItems.push({ name, reason: "no Lesson Name" });
++          continue;
++        }
++        const tags = cellText(item, col.tags)
++          ?.split(",")
++          .map((t) => t.trim())
++          .filter(Boolean);
++        sectionLessons.push({
++          id: lessonIdFor(name),
++          lessonName,
++          ...(cellText(item, col.description) ? { description: cellText(item, col.description)! } : {}),
++          ...(tags?.length ? { tags } : {}),
++        });
++      }
++      // Display order = lesson numbering (25SWSimPro03_02 before 25SWSimPro03_10), not Monday's item order.
++      sectionLessons.sort((a, b) => a.id.localeCompare(b.id, "en", { numeric: true, sensitivity: "base" }));
++      return { sectionIndex: g.index, title: g.title, lessons: sectionLessons };
++    });
++
++  report.sections = sections.length;
++  report.lessons = sections.reduce((n, s) => n + s.lessons.length, 0);
++  return { input: { id: course.id, courseName: course.courseName, sections }, report };
++}
+-- 
+2.43.0
+

@@ -1,0 +1,290 @@
+From ccbe8800ebd847f9d6ce39734c6435674eeab054 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 7 Oct 2026 20:59:43 -0700
+Subject: [PATCH] Structure import is names and descriptions only; scripts come
+ as files
+
+POST /courses/import no longer accepts scriptText (and drops the 20 MB body
+limit). Scripts go through PUT /courses/:courseId/scripts; a changed script
+clears the typo-check marker, and re-uploading the pre-fix original of a
+proofread script counts as unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019SfrJH4SbgPjULJKHTAFnx
+---
+ docs/architecture.md                          |  3 ++-
+ docs/decisions.md                             | 12 +++++++++-
+ docs/endpoints-guide.md                       | 22 ++++++++++---------
+ docs/pipeline-flow.md                         |  3 ++-
+ docs/rationale/schema-guide.md                |  2 +-
+ src/routes/courses.route.ts                   | 11 ++++------
+ src/routes/lessons.route.ts                   |  2 +-
+ src/services/catalog/importCourseStructure.ts | 20 -----------------
+ src/services/catalog/updateCourseScripts.ts   |  7 ++++--
+ 9 files changed, 38 insertions(+), 44 deletions(-)
+
+diff --git a/docs/architecture.md b/docs/architecture.md
+index c4728b8..7382e55 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -105,7 +105,8 @@ pipeline (full schema in `rationale/schema-guide.md`) — not placeholders.
+ They're load-bearing and populated manually/internally — in bulk via
+ `POST /courses/import`, which writes a whole course in one call: the
+ course, its sections (`course_sections`), lesson placement
+-(`course_lessons.section_id`/`position`) and each lesson's script text.
++(`course_lessons.section_id`/`position`); scripts follow through
++`PUT /courses/:courseId/scripts`.
+ 
+ Once the separate LCMS system ships, these tables become local
+ shadow/reference tables: `id` values will originate from LCMS (synced or
+diff --git a/docs/decisions.md b/docs/decisions.md
+index bdb5323..1f27279 100644
+--- a/docs/decisions.md
++++ b/docs/decisions.md
+@@ -613,4 +613,14 @@ stays its own job, run per language in parallel.
+   re-picked-up automatically. Retrying an explicit failure is presumed to be
+   a separate, manual action (mark the failed row `superseded`, then
+   re-invoke) rather than something this function does on its own. Not yet
+-  validated against how the frontend actually wants failure retries to work.
+\ No newline at end of file
++  validated against how the frontend actually wants failure retries to work.
++## Structure JSON carries no scripts; scripts are uploaded as files
++`POST /courses/import` is structure and metadata only (course details,
++sections, lesson names and descriptions); `scriptText` is no longer accepted.
++Scripts arrive through `PUT /courses/:courseId/scripts`, which the console
++fills from `.txt` files named by lesson id. Keeps the JSON small and
++hand-editable, and matches how scripts are written (one document per lesson).
++Supersedes the "(+ scripts)" part of "Course structure is imported in one call".
++A plain upload that changes a script clears `script_source_text`, so the next
++Translate typo-checks it again; re-uploading the pre-fix original of a script
++the typo check corrected is treated as unchanged, so the fixes aren't lost.
+diff --git a/docs/endpoints-guide.md b/docs/endpoints-guide.md
+index 27eca2e..ff606c5 100644
+--- a/docs/endpoints-guide.md
++++ b/docs/endpoints-guide.md
+@@ -83,7 +83,7 @@ Sync — loads or refreshes a whole course structure in one transaction.
+ Logic in `importCourseStructure` (`src/services/catalog/
+ importCourseStructure.ts`), DB only. Body:
+ `{ id, courseName, description?, status?, sections: [{ sectionIndex, title,
+-lessons: [{ id, lessonName, description?, scriptText?, tags? }] }] }` —
++lessons: [{ id, lessonName, description?, tags? }] }] }` —
+ sections and lessons in display order (array position becomes
+ `course_lessons.position`). Course `description`: omit to keep the stored
+ one, `""` to clear it. The result also has `courseUpdated` (existing course
+@@ -94,19 +94,18 @@ whose name, description or status changed).
+   sections and memberships missing from it are removed from this course.
+   Lessons are never deleted (they may belong to other courses and own
+   segments/audio).
+-- Omitting `scriptText` leaves an existing script untouched. A changed
+-  script bumps `script_updated_at` only — never re-parses.
++- **Structure and metadata only — no script text.** Scripts come through
++  `PUT /courses/:courseId/scripts` (the console uploads one `.txt` per
++  lesson, named by lesson id). Existing scripts are never touched.
+ - Returns `{ courseId, sectionCount, lessonCount, lessonsCreated,
+-  lessonsUpdated, scriptsChanged, needsReparse }`. `needsReparse` = changed
+-  scripts on already-parsed lessons; calling parse on those is the caller's
+-  explicit choice, since re-parse wipes translations and audio.
++  lessonsUpdated }`.
+ - `400` on duplicate `sectionIndex` or a lesson id repeated within the
+-  course. Body limit raised to 20 MB for full-course scripts.
++  course.
+ - `?dryRun=true` runs the same transaction and rolls it back — a preview
+   that can't disagree with the real import. The result (both modes) also
+   carries `dryRun`, `courseCreated`, `sectionsAdded`, `sectionsRemoved`,
+   `lessonsUnchanged` and `lessonsRemovedFromCourse`; `lessonsUpdated` now
+-  lists only lessons whose name, description or script actually changed.
++  lists only lessons whose name or description actually changed.
+ 
+ ---
+ 
+@@ -119,7 +118,10 @@ lessons already in the course, bumping `script_updated_at` only when the
+ text actually changes. Structure and membership are untouched, so a partial
+ list is safe — unlike `POST /courses/import`, whose payload is the full
+ structure. All-or-nothing: `400` if a `lessonId` is duplicated or isn't in
+-this course, `404` if the course doesn't exist. Never parses. Returns
++this course, `404` if the course doesn't exist. Never parses. A new script
++clears the typo-check marker (`script_source_text`), so the next Translate
++checks it again; re-uploading the original file of a script the typo check
++already fixed counts as unchanged (the fixes are kept). Returns
+ `{ courseId, dryRun, scriptsChanged, unchanged, needsReparse }`;
+ `?dryRun=true` previews without saving.
+ 
+@@ -223,7 +225,7 @@ Box via `boxFileId` only when `script_text` is null), splits it via
+ spaCy, and rewrites `lesson_segments` for the lesson inside one transaction
+ (cascading to delete existing `segment_translations`/`tts_clips` — see
+ `docs/decisions.md` on re-parse being destructive). Requires the lesson to
+-have `script_text` (via `POST /courses/import`) or a `boxFileId`. Returns
++have `script_text` (via `PUT /courses/:courseId/scripts`) or a `boxFileId`. Returns
+ `{ lessonId, segmentCount, parsedAt }`.
+ 
+ ---
+diff --git a/docs/pipeline-flow.md b/docs/pipeline-flow.md
+index f18a739..342700a 100644
+--- a/docs/pipeline-flow.md
++++ b/docs/pipeline-flow.md
+@@ -83,7 +83,8 @@ Scripts from files: `npm run scripts:load -- <courseId> <folder> --proofread
+ decisions.md, "Scripts are proofread…"); its report is
+ `<folder>/_proofread-report.md`.
+ 
+-1. `POST /courses/import` upserts course → sections → lessons, storing each
++1. `POST /courses/import` upserts course → sections → lessons (names and
++   descriptions only); `PUT /courses/:courseId/scripts` then stores each
+    lesson's full English script in `lessons.script_text` (no parsing).
+ 2. `POST /lessons/:lessonId/parse` reads `script_text` (Box via
+    `box_file_id` only as a fallback), calls spaCy, and rewrites
+diff --git a/docs/rationale/schema-guide.md b/docs/rationale/schema-guide.md
+index 046a08f..e72f243 100644
+--- a/docs/rationale/schema-guide.md
++++ b/docs/rationale/schema-guide.md
+@@ -118,7 +118,7 @@ is an independent block, not owned by a single course — see
+ | `lesson_name`   | text              |                                                                          |
+ | `description`   | text, null        | Short learner-facing summary shown under the lesson title on the platform |
+ | `script_text`   | text, null        | Full English script. Source of truth for parsing while the Box structure is undecided. Null until imported |
+-| `script_source_text` | text, null      | The script as loaded (file text) that `script_text` was proofread from (`scripts:load --proofread`) — set even when proofreading changed nothing. Null = not proofread. Lets a reload of an unchanged file skip proofreading |
++| `script_source_text` | text, null      | The script as loaded (file text) that `script_text` was proofread from (`scripts:load --proofread`) — set even when proofreading changed nothing. Null = not proofread (also set by the course Translate's typo check; cleared when `PUT /courses/:courseId/scripts` changes the script). Lets a reload of an unchanged file skip proofreading |
+ | `script_updated_at` | timestamptz, null | Bumped only when `script_text` actually changes. `script_updated_at > parsed_at` means segments were cut from an older script (reported as `parseStale`) |
+ | `tags`          | text[], default `{}` | Catalog tags from the course board ("Lesson Level Tags"). Not translated |
+ | `box_file_id`   | text, null        | Box file ID of the English source script. Optional future pointer; parsing only falls back to it when `script_text` is null |
+diff --git a/src/routes/courses.route.ts b/src/routes/courses.route.ts
+index 3e390e0..c6bdebc 100644
+--- a/src/routes/courses.route.ts
++++ b/src/routes/courses.route.ts
+@@ -44,7 +44,6 @@ const lessonImportSchema = {
+     id: { type: "string", minLength: 1 },
+     lessonName: { type: "string", minLength: 1 },
+     description: { type: "string" },
+-    scriptText: { type: "string" },
+     tags: { type: "array", items: { type: "string" } },
+   },
+ } as const;
+@@ -66,15 +65,13 @@ export async function coursesRoute(app: FastifyInstance) {
+   app.post(
+     "/courses/import",
+     {
+-      // Full scripts for a whole course can exceed Fastify's 1 MB default.
+-      bodyLimit: 20 * 1024 * 1024,
+       schema: {
+         description:
+-          "Idempotent upsert of a full course structure in one transaction: course → ordered sections → " +
+-          "ordered lessons, with optional full English scriptText per lesson. The payload is the complete " +
++          "Idempotent upsert of a full course structure in one transaction: course details → ordered sections → " +
++          "ordered lessons (names, descriptions, tags). Structure and metadata only — scripts come through " +
++          "PUT /courses/:courseId/scripts (the console's script-file upload). The payload is the complete " +
+           "desired structure — sections/memberships missing from it are removed from this course (lessons " +
+-          "themselves are never deleted). Never parses: a changed script bumps script_updated_at and is " +
+-          "reported in needsReparse if the lesson was already parsed. 400 on duplicate section indexes or " +
++          "themselves are never deleted). 400 on duplicate section indexes or " +
+           "lesson ids. ?dryRun=true runs the same writes and rolls them back — a preview that returns the same " +
+           "result shape (sectionsAdded/Removed, lessonsCreated/Updated/Unchanged/RemovedFromCourse, …) with " +
+           "dryRun: true and nothing saved.",
+diff --git a/src/routes/lessons.route.ts b/src/routes/lessons.route.ts
+index 50368bf..f47202c 100644
+--- a/src/routes/lessons.route.ts
++++ b/src/routes/lessons.route.ts
+@@ -65,7 +65,7 @@ export async function lessonsRoute(app: FastifyInstance) {
+           "Parses a lesson's English script (lessons.script_text, falling back to Box via boxFileId) into lesson_segments via " +
+           "spaCy — one transaction, rewriting all segments for the lesson. Re-parsing is destructive: it " +
+           "cascades to delete existing segment_translations/tts_clips for this lesson across every " +
+-          "language. Requires scriptText (POST /courses/import) or boxFileId to be set.",
++          "language. Requires scriptText (PUT /courses/:courseId/scripts) or boxFileId to be set.",
+         security: [{ apiKey: [] }],
+         params: {
+           type: "object",
+diff --git a/src/services/catalog/importCourseStructure.ts b/src/services/catalog/importCourseStructure.ts
+index e25de56..997c5b6 100644
+--- a/src/services/catalog/importCourseStructure.ts
++++ b/src/services/catalog/importCourseStructure.ts
+@@ -7,8 +7,6 @@ export interface ImportLessonInput {
+   id: string;
+   lessonName: string;
+   description?: string;
+-  /** Full English script. Omit to leave an existing script untouched. */
+-  scriptText?: string;
+   /** Catalog tags. Omit to leave existing tags untouched. */
+   tags?: string[];
+ }
+@@ -50,10 +48,6 @@ export interface ImportCourseResult {
+   lessonsUnchanged: string[];
+   /** Were in this course, not in the payload — removed from the course (the lessons themselves are kept). */
+   lessonsRemovedFromCourse: string[];
+-  /** Lessons whose script_text was set or changed by this import. */
+-  scriptsChanged: string[];
+-  /** Subset of scriptsChanged that were already parsed — their segments are now stale. */
+-  needsReparse: string[];
+ }
+ 
+ export class CourseImportValidationError extends Error {}
+@@ -162,21 +156,16 @@ export async function importCourseStructure(
+         lessonsUpdated: [],
+         lessonsUnchanged: [],
+         lessonsRemovedFromCourse: previousMembers.map((m) => m.lessonId).filter((id) => !payloadLessonIds.has(id)),
+-        scriptsChanged: [],
+-        needsReparse: [],
+       };
+ 
+       for (const lesson of allLessons) {
+         const existing = existingById.get(lesson.id);
+-        const scriptChanged = lesson.scriptText !== undefined && lesson.scriptText !== existing?.scriptText;
+ 
+         if (!existing) {
+           await tx.insert(lessons).values({
+             id: lesson.id,
+             lessonName: lesson.lessonName,
+             description: lesson.description ?? null,
+-            scriptText: lesson.scriptText ?? null,
+-            scriptUpdatedAt: lesson.scriptText !== undefined ? now : null,
+             tags: lesson.tags ?? [],
+           });
+           result.lessonsCreated.push(lesson.id);
+@@ -187,23 +176,14 @@ export async function importCourseStructure(
+               lessonName: lesson.lessonName,
+               description: lesson.description ?? existing.description,
+               ...(lesson.tags !== undefined ? { tags: lesson.tags } : {}),
+-              ...(scriptChanged ? { scriptText: lesson.scriptText, scriptUpdatedAt: now } : {}),
+               updatedAt: now,
+             })
+             .where(eq(lessons.id, lesson.id));
+           const changed =
+-            scriptChanged ||
+             existing.lessonName !== lesson.lessonName ||
+             (lesson.description !== undefined && lesson.description !== existing.description) ||
+             (lesson.tags !== undefined && lesson.tags.join("\u0000") !== existing.tags.join("\u0000"));
+           (changed ? result.lessonsUpdated : result.lessonsUnchanged).push(lesson.id);
+-          if (scriptChanged && existing.parsedAt) {
+-            result.needsReparse.push(lesson.id);
+-          }
+-        }
+-
+-        if (scriptChanged) {
+-          result.scriptsChanged.push(lesson.id);
+         }
+       }
+ 
+diff --git a/src/services/catalog/updateCourseScripts.ts b/src/services/catalog/updateCourseScripts.ts
+index e69f15b..9084c45 100644
+--- a/src/services/catalog/updateCourseScripts.ts
++++ b/src/services/catalog/updateCourseScripts.ts
+@@ -93,7 +93,9 @@ export async function updateCourseScripts(
+       for (const { lessonId, scriptText, sourceText } of scripts) {
+         const existing = byId.get(lessonId)!;
+         const scriptSourceText = sourceText ?? null;
+-        if (existing.scriptText === scriptText) {
++        // A plain upload of the file a stored script was typo-fixed from is the same script.
++        const sameAsProofreadSource = sourceText === undefined && existing.scriptSourceText === scriptText;
++        if (existing.scriptText === scriptText || sameAsProofreadSource) {
+           // Same script — only record its source if that changed (no parse impact).
+           if (sourceText !== undefined && existing.scriptSourceText !== scriptSourceText) {
+             await tx.update(lessons).set({ scriptSourceText }).where(eq(lessons.id, lessonId));
+@@ -103,7 +105,8 @@ export async function updateCourseScripts(
+         }
+         await tx
+           .update(lessons)
+-          .set({ scriptText, ...(sourceText !== undefined ? { scriptSourceText } : {}), scriptUpdatedAt: now, updatedAt: now })
++          // New text from a plain upload hasn't been typo-checked: clear the marker so Translate checks it.
++          .set({ scriptText, scriptSourceText, scriptUpdatedAt: now, updatedAt: now })
+           .where(eq(lessons.id, lessonId));
+         result.scriptsChanged.push(lessonId);
+         if (existing.parsedAt) result.needsReparse.push(lessonId);
+-- 
+2.43.0
+
