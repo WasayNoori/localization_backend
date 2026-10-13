@@ -692,3 +692,13 @@ with no change to the rest of the sentence; Claude picked the right sense in
 unclear is flagged). A person's decision is never overwritten. Staleness
 works like formality: a translation whose `term_guidance` differs from what
 it should get now is redone by the next course translation ("missing").
+
+## Ambiguous terms apply to new translations only (2026-10-13)
+Translations made without term instructions (`term_guidance` null — every
+translation from before ambiguous terms existed) are never treated as stale
+because of a term; only translations made WITH instructions are redone when
+those instructions change (a sense's translation, a decision). Already
+translated and voiced courses therefore don't get re-translated — and their
+audio invalidated — just because a term was added. Re-translating a lesson or
+segment by hand applies the current instructions. Supersedes the staleness
+rule in "Ambiguous terms: senses decided per segment…" above for null rows.

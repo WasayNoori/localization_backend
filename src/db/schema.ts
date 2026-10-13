@@ -297,9 +297,10 @@ export const segmentTranslations = pgTable(
     formality: text("formality"),
     billedCharacters: integer("billed_characters"),
     // Snapshot of the DeepL custom instructions sent for ambiguous terms (see
-    // ambiguous_terms below); null = none. When the instructions this segment
-    // should get now differ, the translation is stale and the course
-    // translation's "missing" mode redoes it (same idea as formality).
+    // ambiguous_terms below); null = none. A translation made WITH instructions
+    // that differ from what the segment should get now is stale, and the course
+    // translation's "missing" mode redoes it. Null rows (older translations) are
+    // never redone automatically — see docs/decisions.md.
     termGuidance: jsonb("term_guidance").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

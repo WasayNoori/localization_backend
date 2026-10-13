@@ -195,7 +195,9 @@ separate, explicit call back into the generate loop above (`segmentId` +
 3. `translateCourseLessons(mode)` — the scripts. Each segment's DeepL request
    carries one custom instruction per decided sense that has a translation in
    that language (`termGuidance.ts`), snapshotted in `term_guidance`. In
-   `missing` mode a translation is stale when its formality or its
-   `term_guidance` differs from what it should get now — so editing a sense's
-   translation or a decision redoes only the affected segments.
+   `missing` mode a translation is stale when its formality differs, or when it
+   was made WITH term instructions that differ from what it should get now —
+   so editing a sense's translation or a decision redoes only the affected
+   segments. Translations made without instructions (older ones) are never
+   redone because of a term; re-translate by hand to apply terms to them.
 Jobs of one course queue (status `pending`) behind each other.

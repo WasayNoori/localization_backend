@@ -545,7 +545,7 @@ Common English words kept out of the DeepL glossaries because their translation 
 
 - `GET /terms` → `[{ id, term, note, active, senses: [{ id, meaning, translations: { fr, es… } }], segmentCount, updatedAt }]`.
 - `POST /terms` `{ term, note?, active?, senses: [{ meaning, translations? }] }` (at least two senses) → `201` the term. 409 exists (case-insensitive).
-- `PUT /terms/:termId` same body; senses with `id` are updated, without one added, missing ones deleted with their decisions. Rewording the term or a sense, or adding a sense, clears Claude's decisions for it (a person's stay). Translation-only edits keep decisions; the affected translations become stale.
+- `PUT /terms/:termId` same body; senses with `id` are updated, without one added, missing ones deleted with their decisions. Rewording the term or a sense, or adding a sense, clears Claude's decisions for it (a person's stay). Translation-only edits keep decisions; translations made with the old instruction become stale (translations made without instructions are never redone automatically).
 - `DELETE /terms/:termId` → 204, with senses and decisions.
 - `GET /lessons/:lessonId/terms` → `[{ segmentId, segmentNumber, termId, term, outcome: sense|other|unclear|unchecked, senseId, meaning, decidedBy: claude|person|null, note, decidedAt }]` — every active term found in the lesson's segments.
 - `POST /lessons/:lessonId/terms/check` `{ recheck? }` → `{ lessonId, segmentsWithTerms, asked, outcomes { sense, other, unclear }, error }`. Sync. Translation runs the same check; `recheck` asks again for Claude's decisions too.

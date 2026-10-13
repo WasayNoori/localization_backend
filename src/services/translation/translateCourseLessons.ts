@@ -130,9 +130,12 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
           )
         )
     )
-      // A translation made under a different formality, or with other
-      // ambiguous-term instructions than the segment should get now, is stale — redo it.
-      .filter((r) => r.formality === formality && sameGuidance(r.termGuidance, guidance.get(r.segmentId)))
+      // A translation made under a different formality is stale — redo it. So is one
+      // made WITH ambiguous-term instructions that differ from what it should get now.
+      // One made without any (null: before ambiguous terms existed, or no term in it) is
+      // never redone automatically — term changes apply to new translations only;
+      // re-translate a lesson or segment by hand to apply them to older ones.
+      .filter((r) => r.formality === formality && (r.termGuidance === null || sameGuidance(r.termGuidance, guidance.get(r.segmentId))))
       .map((r) => r.segmentId)
   );
   return { all, untranslated: all.map((s) => s.id).filter((id) => !done.has(id)) };
