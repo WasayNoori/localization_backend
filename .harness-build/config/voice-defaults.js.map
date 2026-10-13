@@ -1,1 +1,0 @@
-{"version":3,"file":"voice-defaults.js","sourceRoot":"","sources":["../../../../home/claude/localization_backend/src/config/voice-defaults.ts"],"names":[],"mappings":"AAMA,MAAM,CAAC,MAAM,iBAAiB,GAAG,wBAAwB,CAAC;AAE1D,MAAM,CAAC,MAAM,sBAAsB,GAAkB;IACnD,SAAS,EAAE,GAAG;IACd,eAAe,EAAE,IAAI;IACrB,KAAK,EAAE,CAAC;IACR,KAAK,EAAE,CAAC;IACR,eAAe,EAAE,IAAI;CACtB,CAAC"}

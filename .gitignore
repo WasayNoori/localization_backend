@@ -144,3 +144,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Build scripts and patches from Claude sessions (not part of the app)
+.harness-build/
