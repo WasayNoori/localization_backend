@@ -536,3 +536,18 @@ Interim; see `src/modules/quiz/README.md`. Stores nothing about quizzes.
 ## Monday outline module (detachable) — `src/modules/monday-outline`
 
 - `POST /courses/:courseId/import/monday` (`?dryRun=true` previews) → the `POST /courses/import` result plus `monday { board, sections, lessons, idChanges[], idsNotMatchingCourse[], skippedGroups[], skippedItems[] }`. Reads the course's Monday board: groups `Section N - Title` → sections, their items → lessons (item name = lesson id; Lesson Name, Lesson Description, Lesson Level Tags). Lesson-id casing: existing lesson (case-insensitive) keeps its id → else course-id prefix recased → else as is. Course name/description/status unchanged. 400 no Monday board / unreadable / no section groups / invalid structure, 404.
+
+---
+
+## Ambiguous terms — `src/routes/terms.route.ts`
+
+Common English words kept out of the DeepL glossaries because their translation depends on the sentence (Tab: dialog tab or sheet-metal tab). Claude decides the sense per segment before translation; DeepL gets a custom instruction for it. See `docs/decisions.md` ("Ambiguous terms").
+
+- `GET /terms` → `[{ id, term, note, active, senses: [{ id, meaning, translations: { fr, es… } }], segmentCount, updatedAt }]`.
+- `POST /terms` `{ term, note?, active?, senses: [{ meaning, translations? }] }` (at least two senses) → `201` the term. 409 exists (case-insensitive).
+- `PUT /terms/:termId` same body; senses with `id` are updated, without one added, missing ones deleted with their decisions. Rewording the term or a sense, or adding a sense, clears Claude's decisions for it (a person's stay). Translation-only edits keep decisions; the affected translations become stale.
+- `DELETE /terms/:termId` → 204, with senses and decisions.
+- `GET /lessons/:lessonId/terms` → `[{ segmentId, segmentNumber, termId, term, outcome: sense|other|unclear|unchecked, senseId, meaning, decidedBy: claude|person|null, note, decidedAt }]` — every active term found in the lesson's segments.
+- `POST /lessons/:lessonId/terms/check` `{ recheck? }` → `{ lessonId, segmentsWithTerms, asked, outcomes { sense, other, unclear }, error }`. Sync. Translation runs the same check; `recheck` asks again for Claude's decisions too.
+- `PUT /segments/:segmentId/terms/:termId` `{ outcome, senseId?, note? }` → 204. A person's decision; never overwritten by a re-check.
+- `POST /lessons/:lessonId/translations/:lang` and the course translation job run the check first; the lesson result adds `terms` (the check result). Segment retranslate runs it too.

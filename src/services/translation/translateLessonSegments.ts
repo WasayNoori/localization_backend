@@ -2,12 +2,16 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { lessons, segmentTranslations, ttsClips } from "../../db/schema.js";
-import type { ITranslationService } from "../../interfaces/ITranslationService.js";
+import type { ITermSenseResolver } from "../../interfaces/ITermSenseResolver.js";
+import { checkLessonTerms, type CheckTermsResult } from "../terms/checkLessonTerms.js";
 import { loadLessonContext } from "./buildLessonContext.js";
 import { translateAndStoreSegment } from "./translateAndStoreSegment.js";
 import { translateLessonScaffoldingIfNeeded, type TranslateScaffoldingDeps } from "./translateScaffolding.js";
 
-export interface TranslateLessonDeps extends TranslateScaffoldingDeps {}
+export interface TranslateLessonDeps extends TranslateScaffoldingDeps {
+  /** When set, the lesson's ambiguous terms are checked (senses decided) before translating. */
+  termSenseResolver?: ITermSenseResolver;
+}
 
 export interface TranslateLessonOptions {
   /** Restrict to these segments of the lesson (e.g. a UI multi-select). Default: every segment. */
@@ -32,6 +36,8 @@ export interface TranslateLessonResult {
    * review flagged them; `error` = translation or review failed.
    */
   titles: { translated: boolean; flagged: boolean; error: string | null };
+  /** Ambiguous-term check run before translating; null when no resolver was given. */
+  terms: CheckTermsResult | null;
 }
 
 /**
@@ -72,6 +78,11 @@ export async function translateLessonSegments(
     }
   }
 
+  // Senses for ambiguous terms first (language-independent; a no-op when already decided).
+  const terms = deps.termSenseResolver
+    ? await checkLessonTerms({ db, termSenseResolver: deps.termSenseResolver }, lessonId)
+    : null;
+
   const translated: string[] = [];
   const errors: { segmentId: string; error: string }[] = [];
 
@@ -101,7 +112,7 @@ export async function translateLessonSegments(
     }
   }
 
-  return { lessonId, targetLanguage, totalSegments: segments.length, translated, errors, audioStale, titles };
+  return { lessonId, targetLanguage, totalSegments: segments.length, translated, errors, audioStale, titles, terms };
 }
 
 export class TranslateLessonError extends Error {}

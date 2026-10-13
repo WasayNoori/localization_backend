@@ -32,7 +32,7 @@ export async function segmentsRoute(app: FastifyInstance) {
 
       try {
         const result = await retranslateSegment(
-          { db: app.db, translationService: app.translationService },
+          { db: app.db, translationService: app.translationService, termSenseResolver: app.termSenseResolver },
           segmentId,
           targetLanguage
         );

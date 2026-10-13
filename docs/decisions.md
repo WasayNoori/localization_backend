@@ -674,3 +674,21 @@ audio in spoken characters (what ElevenLabs bills); audio not yet translated
 is estimated with the language's translated/English ratio and reported
 separately as `remainingEstimated`. Time estimates (chars per minute) are a
 console concern, not the API's.
+
+## Ambiguous terms: senses decided per segment before translation, sent as DeepL custom instructions
+Common words whose meaning depends on the sentence (Tab, Plot, Feature) are
+removed from the DeepL glossaries, which apply blindly, and listed in
+`ambiguous_terms` with their senses and a translation per language. Before
+translation, Claude picks the sense used in each segment containing the term
+(`checkLessonTerms`), choosing only among listed senses; the decision is
+stored per segment and term, once for every language. Translation then sends
+DeepL one `custom_instructions` entry per decided sense ("'Tab' here means …;
+translate it as 'onglet'"). Chosen over deciding at DeepL time (same question
+asked once per language, possibly answered differently) and over glossary
+splits (a glossary can't depend on the sentence). Tested 2026-10-13: DeepL
+followed the instructions and they won over a conflicting glossary entry,
+with no change to the rest of the sentence; Claude picked the right sense in
+24/24 real segments. `other`/`unclear` send no instruction (DeepL decides;
+unclear is flagged). A person's decision is never overwritten. Staleness
+works like formality: a translation whose `term_guidance` differs from what
+it should get now is redone by the next course translation ("missing").

@@ -8,3 +8,4 @@ export * from "./IvoiceSettingsProvider.js";
 export * from "./ITranslationReviewer.js";
 export * from "./ILessonOutputStore.js";
 export * from "./IScriptProofreader.js";
+export * from "./ITermSenseResolver.js";

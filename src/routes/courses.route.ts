@@ -375,6 +375,7 @@ export async function coursesRoute(app: FastifyInstance) {
             db: app.db,
             translationService: app.translationService,
             translationReviewer: app.translationReviewer,
+            termSenseResolver: app.termSenseResolver,
             nlpService: app.nlpService,
             scriptProofreader: app.scriptProofreader,
           },

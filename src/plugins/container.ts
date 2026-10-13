@@ -15,6 +15,8 @@ import { SpacyNlpService } from "../services/nlp/SpacyNlpService.js";
 import type { IAudioQcService } from "../interfaces/IAudioQcService.js";
 import { BasicAudioQcService } from "../services/qc/BasicAudioQcService.js";
 import type { ITranslationReviewer } from "../interfaces/ITranslationReviewer.js";
+import type { ITermSenseResolver } from "../interfaces/ITermSenseResolver.js";
+import { ClaudeTermSenseResolver } from "../services/terms/ClaudeTermSenseResolver.js";
 import { ClaudeTranslationReviewer } from "../services/review/ClaudeTranslationReviewer.js";
 import type { IScriptProofreader } from "../interfaces/IScriptProofreader.js";
 import { ClaudeScriptProofreader } from "../services/proofreading/ClaudeScriptProofreader.js";
@@ -47,6 +49,8 @@ declare module "fastify" {
     nlpService: INlpService;
     qcService: IAudioQcService;
     translationReviewer: ITranslationReviewer;
+    /** Picks the sense of ambiguous terms per segment, before translation. */
+    termSenseResolver: ITermSenseResolver;
     scriptProofreader: IScriptProofreader;
     /** Null when LOCAL_OUTPUT_ROOT isn't set. */
     lessonOutputStore: ILessonOutputStore | null;
@@ -94,6 +98,7 @@ export const container = fp(async (app: FastifyInstance) => {
 
   const translationReviewer = new ClaudeTranslationReviewer(secretsProvider, env.ANTHROPIC_REVIEW_MODEL);
   app.decorate("translationReviewer", translationReviewer);
+  app.decorate("termSenseResolver", new ClaudeTermSenseResolver(secretsProvider, env.ANTHROPIC_REVIEW_MODEL));
   app.decorate("scriptProofreader", new ClaudeScriptProofreader(secretsProvider, env.ANTHROPIC_REVIEW_MODEL));
 
   const lessonOutputStore = env.LOCAL_OUTPUT_ROOT ? new LocalFolderLessonOutputStore(env.LOCAL_OUTPUT_ROOT) : null;

@@ -186,7 +186,16 @@ separate, explicit call back into the generate loop above (`segmentId` +
 1. `prepareCourseScripts` — typo check (if `proofread`) of scripts never
    checked (`script_source_text` null), then parse lessons not parsed (or
    whose script changed and that have nothing to lose). Shared by all languages.
+   Then, when active ambiguous terms exist, `checkLessonTerms` per lesson:
+   Claude decides the sense of each ambiguous term in segments without a
+   decision (phase `checking ambiguous terms`; stats `termsChecked`,
+   `termsUnclear`). Shared by all languages.
 2. `translateCourseScaffolding(missing)` — course name, section titles, lesson
    names/descriptions; Claude flags show on the course page.
-3. `translateCourseLessons(mode)` — the scripts.
+3. `translateCourseLessons(mode)` — the scripts. Each segment's DeepL request
+   carries one custom instruction per decided sense that has a translation in
+   that language (`termGuidance.ts`), snapshotted in `term_guidance`. In
+   `missing` mode a translation is stale when its formality or its
+   `term_guidance` differs from what it should get now — so editing a sense's
+   translation or a decision redoes only the affected segments.
 Jobs of one course queue (status `pending`) behind each other.

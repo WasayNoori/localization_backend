@@ -2,6 +2,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { courseLessons, courseSections, courses, lessonSegments, segmentTranslations } from "../../db/schema.js";
+import { getTermGuidance, sameGuidance } from "../terms/termGuidance.js";
 import { getFormality } from "./getFormality.js";
 import { translateLessonSegments, type TranslateLessonDeps } from "./translateLessonSegments.js";
 
@@ -112,10 +113,15 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
   const all = await db.select({ id: lessonSegments.id }).from(lessonSegments).where(eq(lessonSegments.lessonId, lessonId));
   if (!all.length) return { all, untranslated: [] as string[] };
   const formality = (await getFormality(db, targetLanguage)) ?? null;
+  const guidance = await getTermGuidance(db, all.map((s) => s.id), targetLanguage);
   const done = new Set(
     (
       await db
-        .select({ segmentId: segmentTranslations.segmentId, formality: segmentTranslations.formality })
+        .select({
+          segmentId: segmentTranslations.segmentId,
+          formality: segmentTranslations.formality,
+          termGuidance: segmentTranslations.termGuidance,
+        })
         .from(segmentTranslations)
         .where(
           and(
@@ -124,8 +130,9 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
           )
         )
     )
-      // A translation made under a different formality is stale — redo it.
-      .filter((r) => r.formality === formality)
+      // A translation made under a different formality, or with other
+      // ambiguous-term instructions than the segment should get now, is stale — redo it.
+      .filter((r) => r.formality === formality && sameGuidance(r.termGuidance, guidance.get(r.segmentId)))
       .map((r) => r.segmentId)
   );
   return { all, untranslated: all.map((s) => s.id).filter((id) => !done.has(id)) };

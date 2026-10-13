@@ -3,12 +3,16 @@ import { and, eq, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { lessonSegments, ttsClips } from "../../db/schema.js";
 import type { ITranslationService } from "../../interfaces/ITranslationService.js";
+import type { ITermSenseResolver } from "../../interfaces/ITermSenseResolver.js";
+import { checkLessonTerms } from "../terms/checkLessonTerms.js";
 import { translateAndStoreSegment } from "./translateAndStoreSegment.js";
 import { loadLessonContext } from "./buildLessonContext.js";
 
 export interface RetranslateSegmentDeps {
   db: Database;
   translationService: ITranslationService;
+  /** When set, the lesson's undecided ambiguous terms are checked first. */
+  termSenseResolver?: ITermSenseResolver;
 }
 
 export interface RetranslateSegmentResult {
@@ -47,6 +51,9 @@ export async function retranslateSegment(
 
   // translateAndStoreSegment overwrites the existing row in place (no
   // status/audit history on segment_translations — see docs/decisions.md).
+  if (deps.termSenseResolver) {
+    await checkLessonTerms({ db, termSenseResolver: deps.termSenseResolver }, segment.lessonId);
+  }
   const { segments, context } = await loadLessonContext(db, segment.lessonId);
   const index = segments.findIndex((s) => s.id === segmentId);
 

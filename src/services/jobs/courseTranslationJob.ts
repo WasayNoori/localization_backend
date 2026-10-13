@@ -5,6 +5,8 @@ import { processingJobs, type ProcessingJobProgress } from "../../db/schema.js";
 import type { INlpService } from "../../interfaces/INlpService.js";
 import type { IScriptProofreader } from "../../interfaces/IScriptProofreader.js";
 import { prepareCourseScripts } from "../translation/prepareCourseScripts.js";
+import { checkLessonTerms } from "../terms/checkLessonTerms.js";
+import { listTerms } from "../terms/termCatalog.js";
 import {
   assertTranslatableCourse,
   courseLessonOrder,
@@ -41,7 +43,8 @@ const courseQueues = new Map<string, Promise<void>>();
  * "Translate this course into one language" as a processing_jobs row, run in
  * the background in this process. Returns at once; poll GET /jobs/:jobId.
  * Steps: (1) get the scripts ready — typo check if asked, then parse what
- * isn't parsed (shared by all languages; idempotent); (2) the scaffolding
+ * isn't parsed (shared by all languages; idempotent), then decide the senses
+ * of ambiguous terms (shared by all languages; only what isn't decided); (2) the scaffolding
  * (course/section/lesson names, descriptions — missing or stale only);
  * (3) the scripts. One active job per course + language; jobs of the same
  * course queue behind each other.
@@ -121,6 +124,26 @@ async function runCourseTranslationJob(deps: CourseTranslationJobDeps, job: Proc
       review: prep.review,
       notes: prep.issues.map((i) => ({ lessonId: i.lessonId, note: i.issue })),
     };
+
+    // 1b. Ambiguous terms: decide the sense per segment (Claude; undecided only) so
+    // translation can send DeepL the matching instructions.
+    if (deps.termSenseResolver) {
+      const terms = await listTerms(db, { activeOnly: true });
+      if (terms.length) {
+        progress = { ...progress, phase: "checking ambiguous terms" };
+        await save("running");
+        let asked = 0;
+        let unclear = 0;
+        for (const lessonId of await courseLessonOrder(db, job.targetId)) {
+          const t = await checkLessonTerms({ db, termSenseResolver: deps.termSenseResolver }, lessonId, { terms });
+          asked += t.asked;
+          unclear += t.outcomes.unclear;
+          if (t.error) progress.notes!.push({ lessonId, note: `ambiguous-term check failed (translated without those instructions): ${t.error}` });
+          else if (t.outcomes.unclear) progress.notes!.push({ lessonId, note: `${t.outcomes.unclear} ambiguous term(s) unclear — DeepL decides; see the lesson page` });
+        }
+        progress = { ...progress, stats: { ...progress.stats, termsChecked: asked, termsUnclear: unclear } };
+      }
+    }
 
     // 2. Scaffolding — names and descriptions (missing or stale only).
     progress = { ...progress, phase: "translating names and descriptions" };

@@ -162,7 +162,12 @@ export async function lessonsRoute(app: FastifyInstance) {
 
       try {
         const result = await translateLessonSegments(
-          { db: app.db, translationService: app.translationService, translationReviewer: app.translationReviewer },
+          {
+            db: app.db,
+            translationService: app.translationService,
+            translationReviewer: app.translationReviewer,
+            termSenseResolver: app.termSenseResolver,
+          },
           lessonId,
           targetLanguage,
           { segmentIds }

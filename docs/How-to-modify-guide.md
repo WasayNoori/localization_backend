@@ -82,6 +82,14 @@ come from `services/output/outputLayout.ts` (`clipFilePath`).
 applied in `services/translation/translateTexts.ts`. Then re-run
 `course:translate` for that language — rows with the old formality are stale.
 
+## To add or change an ambiguous term (word kept out of the glossary)
+`POST/PUT /terms` (console: Terms page). Remove the word from the DeepL
+glossary too. Then re-run the course translation: the check decides senses for
+new segments, and translations whose instructions changed are redone.
+Wording of the instruction: `services/terms/termGuidance.ts`. Claude's prompt:
+`services/terms/ClaudeTermSenseResolver.ts`. Matching (plurals, word
+boundaries): `services/terms/termMatcher.ts`.
+
 ## To change voice settings per language
 In the console: Settings. API: `PUT /languages/:lang/voice-settings`.
 Starting values for new languages: `src/config/voice-defaults.ts`. Allowed

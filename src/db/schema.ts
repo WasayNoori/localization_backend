@@ -296,6 +296,11 @@ export const segmentTranslations = pgTable(
     // gets re-translated by the course translation's "missing" mode.
     formality: text("formality"),
     billedCharacters: integer("billed_characters"),
+    // Snapshot of the DeepL custom instructions sent for ambiguous terms (see
+    // ambiguous_terms below); null = none. When the instructions this segment
+    // should get now differ, the translation is stale and the course
+    // translation's "missing" mode redoes it (same idea as formality).
+    termGuidance: jsonb("term_guidance").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -451,5 +456,76 @@ export const ttsClips = pgTable(
       table.lessonLocalizationId
     ),
     qcStatusIdx: index("tts_clips_qc_status_idx").on(table.qcStatus),
+  })
+);
+
+// Ambiguous terms: common English words whose translation depends on the
+// sentence (Tab = dialog tab or sheet-metal tab), kept OUT of the DeepL
+// glossaries. Each term lists its senses with a translation per language.
+// Before translation, Claude picks the sense used in each segment that
+// contains the term (segment_term_senses); the translation then sends DeepL a
+// custom instruction for it. See docs/decisions.md ("Ambiguous terms").
+export const ambiguousTerms = pgTable(
+  "ambiguous_terms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // English as written ("Tab"). Matched case-insensitively, plurals included.
+    term: text("term").notNull(),
+    note: text("note"),
+    // Inactive terms are ignored by the check and by translation.
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    termIdx: uniqueIndex("ambiguous_terms_term_idx").on(sql`lower(${table.term})`),
+  })
+);
+
+export const ambiguousTermSenses = pgTable(
+  "ambiguous_term_senses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    termId: uuid("term_id")
+      .notNull()
+      .references(() => ambiguousTerms.id, { onDelete: "cascade" }),
+    // English description Claude chooses from ("a tab of a dialog box or PropertyManager").
+    meaning: text("meaning").notNull(),
+    // Translation per target language: { fr: "onglet", es: "pestaña" }. A
+    // language without one gets no instruction for this sense.
+    translations: jsonb("translations").$type<Record<string, string>>().notNull().default({}),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    termIdx: index("ambiguous_term_senses_term_id_idx").on(table.termId),
+  })
+);
+
+// Which sense of an ambiguous term a segment uses — language-independent, so
+// one decision serves every language. Goes away with its segment (re-parse)
+// or term; a deleted sense deletes its decisions so the segment is checked again.
+export const segmentTermSenses = pgTable(
+  "segment_term_senses",
+  {
+    segmentId: uuid("segment_id")
+      .notNull()
+      .references(() => lessonSegments.id, { onDelete: "cascade" }),
+    termId: uuid("term_id")
+      .notNull()
+      .references(() => ambiguousTerms.id, { onDelete: "cascade" }),
+    senseId: uuid("sense_id").references(() => ambiguousTermSenses.id, { onDelete: "cascade" }),
+    // 'sense' (sense_id set) | 'other' (a meaning not listed — DeepL decides) |
+    // 'unclear' (couldn't tell — DeepL decides, flagged for review)
+    outcome: text("outcome").notNull(),
+    // 'claude' | 'person' — a person's choice is never overwritten by a re-check.
+    decidedBy: text("decided_by").notNull(),
+    note: text("note"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.segmentId, table.termId] }),
+    termIdx: index("segment_term_senses_term_id_idx").on(table.termId),
   })
 );

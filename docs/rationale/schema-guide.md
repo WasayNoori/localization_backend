@@ -514,3 +514,9 @@ in the import JSON.
 Box folder (not a clips folder); the course's current folder takes priority.
 `processing_jobs.progress.stats` holds running totals for audio jobs
 (`segmentFiles`, `clips`, `characters`).
+
+## Ambiguous terms (`ambiguous_terms`, `ambiguous_term_senses`, `segment_term_senses`)
+- `ambiguous_terms`: one row per English word kept out of the glossaries (`term`, unique on `lower(term)`; `active`).
+- `ambiguous_term_senses`: its meanings — `meaning` (English, what Claude chooses from) and `translations` jsonb `{ fr: "onglet", es: "pestaña" }`. A language without a translation gets no instruction for that sense.
+- `segment_term_senses`: the sense a segment uses, PK (`segment_id`, `term_id`), language-independent. `outcome` sense | other | unclear; `decided_by` claude | person. Cascades from the segment (re-parse), the term and the sense.
+- `segment_translations.term_guidance` jsonb: the custom instructions actually sent (null = none) — the staleness check compares it with what the segment should get now.
