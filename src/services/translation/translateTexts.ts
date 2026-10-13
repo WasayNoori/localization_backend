@@ -22,12 +22,13 @@ export interface TranslateTextsResult {
  * The single way into DeepL for everything we translate — segments, course
  * scaffolding (course/section/lesson titles, descriptions) and ad-hoc
  * /translate. Always applies the target language's glossary, formality and an
- * English source; callers only decide the texts and the context. Callers never look
+ * English source; callers only decide the texts, the context and any custom
+ * instructions (ambiguous terms). Callers never look
  * up glossaries or call ITranslationService directly (docs/decisions.md).
  */
 export async function translateTexts(
   deps: TranslateTextsDeps,
-  request: { texts: string[]; targetLanguage: string; context?: string }
+  request: { texts: string[]; targetLanguage: string; context?: string; customInstructions?: string[] }
 ): Promise<TranslateTextsResult> {
   const [glossaryId, formality] = await Promise.all([
     getGlossaryId(deps.db, request.targetLanguage),
@@ -41,6 +42,7 @@ export async function translateTexts(
     glossaryId,
     context: request.context,
     formality,
+    customInstructions: request.customInstructions,
   });
   return { translatedTexts, glossaryId, formality };
 }

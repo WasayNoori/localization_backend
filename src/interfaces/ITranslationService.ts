@@ -15,6 +15,11 @@ export interface TranslateRequest {
   context?: string;
   /** Omitted = DeepL's default (it picks per sentence, which can mix registers). */
   formality?: Formality;
+  /**
+   * Word-choice guidance for this request (DeepL custom_instructions: up to
+   * 10, each up to 300 characters). Applies to every text in the request.
+   */
+  customInstructions?: string[];
 }
 
 export interface TranslateResult {

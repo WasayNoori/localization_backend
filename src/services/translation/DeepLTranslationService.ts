@@ -10,6 +10,9 @@ import type {
 } from "../../interfaces/ITranslationService.js";
 
 const DEEPL_BASE_URL = "https://api.deepl.com";
+// DeepL limits for custom_instructions.
+const MAX_CUSTOM_INSTRUCTIONS = 10;
+const MAX_INSTRUCTION_LENGTH = 300;
 
 export class DeepLTranslationService implements ITranslationService {
   constructor(private readonly secretsProvider: ISecretsProvider) {}
@@ -43,6 +46,9 @@ export class DeepLTranslationService implements ITranslationService {
         glossary_id: request.glossaryId,
         context: request.context,
         formality: request.formality,
+        ...(request.customInstructions?.length
+          ? { custom_instructions: request.customInstructions.slice(0, MAX_CUSTOM_INSTRUCTIONS).map((i) => i.slice(0, MAX_INSTRUCTION_LENGTH)) }
+          : {}),
       }),
     });
 
