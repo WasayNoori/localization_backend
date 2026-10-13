@@ -662,3 +662,15 @@ may own course metadata later. Monday item names and course ids can differ in
 casing, so lesson ids resolve as: existing lesson (case-insensitive) → course-id
 prefix recased → as is (reported). Monday access is the shared
 IMondayBoardReader, also used by the quiz module.
+
+## Course character counts are computed on demand, not stored
+`GET /courses/:courseId/characters` sums `char_length` over the current
+segments, translations and clips each time it's asked (a few grouped
+queries), instead of keeping a running total. A stored count would go stale
+on every re-parse, re-translation or regenerated clip, and keeping it right
+would touch every write path; the on-demand query is cheap and always matches
+the data. Translation is counted in English characters (what DeepL bills),
+audio in spoken characters (what ElevenLabs bills); audio not yet translated
+is estimated with the language's translated/English ratio and reported
+separately as `remainingEstimated`. Time estimates (chars per minute) are a
+console concern, not the API's.

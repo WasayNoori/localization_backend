@@ -17,6 +17,7 @@ import {
 } from "../services/catalog/importCourseStructure.js";
 import { getCourseStructure } from "../services/catalog/getCourseStructure.js";
 import { listCourses } from "../services/catalog/listCourses.js";
+import { getCourseCharacterCounts, CharacterCountError } from "../services/catalog/getCourseCharacterCounts.js";
 import { defaultEmptyBody } from "./default-empty-body.js";
 import {
   translateCourseScaffolding,
@@ -471,6 +472,37 @@ export async function coursesRoute(app: FastifyInstance) {
         return reply.send(await auditCourseAudio({ db: app.db, fileStorageService: app.fileStorageService }, courseId, targetLanguage.toLowerCase()));
       } catch (err) {
         if (err instanceof AuditError) {
+          return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  app.get(
+    "/courses/:courseId/characters",
+    {
+      schema: {
+        description:
+          "Character counts for estimating cost and time, computed on demand (nothing stored). English: parsed " +
+          "segments plus the scripts of lessons not parsed yet. Per language: translation done/remaining in English " +
+          "characters (what DeepL bills; null for en) and audio done/remaining in spoken characters (what ElevenLabs " +
+          "bills) — remaining audio uses the translation where it exists, otherwise English × the language's " +
+          "expansion ratio (that part reported as remainingEstimated). ?languages=fr,es (default: en + every " +
+          "language with a voice or translation setting). Read-only. 400 bad language code, 404 unknown course.",
+        security: [{ apiKey: [] }],
+        params: { type: "object", required: ["courseId"], properties: { courseId: { type: "string" } } },
+        querystring: { type: "object", additionalProperties: false, properties: { languages: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      const { courseId } = request.params as { courseId: string };
+      const { languages } = request.query as { languages?: string };
+      try {
+        const codes = languages?.split(",").map((l) => l.trim()).filter(Boolean);
+        return reply.send(await getCourseCharacterCounts(app.db, courseId, codes));
+      } catch (err) {
+        if (err instanceof CharacterCountError) {
           return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });
         }
         throw err;
