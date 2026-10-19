@@ -53,7 +53,7 @@ export async function translateCourseLessons(
   courseId: string,
   targetLanguage: string,
   options: TranslateCourseOptions = {}
-): Promise<CourseTranslationProgress & { stopped: boolean }> {
+): Promise<CourseTranslationProgress & { stopped: boolean; lengthWarnings: { lessonId: string; count: number }[] }> {
   const { db } = deps;
   const mode = options.mode ?? "missing";
   await assertTranslatableCourse(db, courseId, targetLanguage);
@@ -61,8 +61,9 @@ export async function translateCourseLessons(
   const ordered = await courseLessonOrder(db, courseId);
 
   const progress: CourseTranslationProgress = { total: ordered.length, succeeded: [], failed: [], skipped: [] };
+  const lengthWarnings: { lessonId: string; count: number }[] = [];
   for (const lessonId of ordered) {
-    if (options.shouldStop?.()) return { ...progress, stopped: true };
+    if (options.shouldStop?.()) return { ...progress, stopped: true, lengthWarnings };
 
     const { all, untranslated } = await segmentState(db, lessonId, targetLanguage);
     if (all.length === 0) {
@@ -75,6 +76,7 @@ export async function translateCourseLessons(
         // titles); only the missing segments otherwise.
         const partial = mode === "missing" && untranslated.length < all.length;
         const result = await translateLessonSegments(deps, lessonId, targetLanguage, partial ? { segmentIds: untranslated } : {});
+        if (result.lengthWarnings.length) lengthWarnings.push({ lessonId, count: result.lengthWarnings.length });
         if (result.errors.length) {
           progress.failed.push({
             lessonId,
@@ -89,7 +91,7 @@ export async function translateCourseLessons(
     }
     await options.onProgress?.(progress, lessonId);
   }
-  return { ...progress, stopped: false };
+  return { ...progress, stopped: false, lengthWarnings };
 }
 
 export async function assertTranslatableCourse(db: Database, courseId: string, targetLanguage: string): Promise<void> {
@@ -121,6 +123,7 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
           segmentId: segmentTranslations.segmentId,
           formality: segmentTranslations.formality,
           termGuidance: segmentTranslations.termGuidance,
+          lengthWarning: segmentTranslations.lengthWarning,
         })
         .from(segmentTranslations)
         .where(
@@ -135,7 +138,13 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
       // One made without any (null: before ambiguous terms existed, or no term in it) is
       // never redone automatically — term changes apply to new translations only;
       // re-translate a lesson or segment by hand to apply them to older ones.
-      .filter((r) => r.formality === formality && (r.termGuidance === null || sameGuidance(r.termGuidance, guidance.get(r.segmentId))))
+      // A translation flagged as truncated is tried again.
+      .filter(
+        (r) =>
+          r.formality === formality &&
+          !r.lengthWarning &&
+          (r.termGuidance === null || sameGuidance(r.termGuidance, guidance.get(r.segmentId)))
+      )
       .map((r) => r.segmentId)
   );
   return { all, untranslated: all.map((s) => s.id).filter((id) => !done.has(id)) };

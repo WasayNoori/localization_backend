@@ -709,3 +709,17 @@ Audio generation passes the lesson's target language to ElevenLabs as
 PropertyManager") stay in the target language. Sent only for models that
 accept it (v3, v4, Flash/Turbo v2.5); Multilingual v2 doesn't, and may reject
 the request. The model check lives in ElevenLabsTtsService.
+
+## Length check on every DeepL result (2026-10-19)
+DeepL occasionally drops part of a text — sentences, list items, or everything
+but one glossary term (ES course description of 24SWAdvAssy came back as one
+sentence + "Matriz de componentes"; IT 25UsingPDM03_12#8 as just "Opzioni
+Distinta materiali"). It's intermittent: the same request usually succeeds.
+Every language we translate into (fr, es, it, de, pt) runs longer than
+English, so in translateTexts a translation shorter than 75% of its English
+(English ≥ 40 characters) is retried on its own — once as sent, once without
+context — keeping the longest result. Still short → `lengthWarnings`:
+segment translations store it in `segment_translations.length_warning`
+(audio isn't generated from them; the course translation's "missing" mode
+tries them again), scaffolding items are flagged, quiz rows get a Review Flag.
+Languages that run shorter than English (CJK) aren't checked.

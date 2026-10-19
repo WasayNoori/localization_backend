@@ -251,7 +251,7 @@ async function translateAndReview(
   verdicts: Map<string, ReviewVerdict>;
   review: ScaffoldingReviewSummary;
 }> {
-  const { translatedTexts, glossaryId } = await translateTexts(deps, {
+  const { translatedTexts, glossaryId, lengthWarnings } = await translateTexts(deps, {
     texts: items.map((i) => i.source),
     targetLanguage,
     context: deeplContext,
@@ -274,6 +274,14 @@ async function translateAndReview(
       review.error = err instanceof Error ? err.message : String(err);
     }
   }
+  // Length check: still truncated after the retries → flagged, whatever the review said.
+  items.forEach((item, i) => {
+    const warning = lengthWarnings[i];
+    if (!warning) return;
+    const before = verdicts.get(item.key);
+    if (!before?.flagged) review.flagged++;
+    verdicts.set(item.key, { key: item.key, flagged: true, reason: before?.flagged && before.reason ? `${warning}. ${before.reason}` : warning });
+  });
   return { translations, glossaryId, verdicts, review };
 }
 

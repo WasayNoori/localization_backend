@@ -520,3 +520,6 @@ Box folder (not a clips folder); the course's current folder takes priority.
 - `ambiguous_term_senses`: its meanings — `meaning` (English, what Claude chooses from) and `translations` jsonb `{ fr: "onglet", es: "pestaña" }`. A language without a translation gets no instruction for that sense.
 - `segment_term_senses`: the sense a segment uses, PK (`segment_id`, `term_id`), language-independent. `outcome` sense | other | unclear; `decided_by` claude | person. Cascades from the segment (re-parse), the term and the sense.
 - `segment_translations.term_guidance` jsonb: the custom instructions actually sent (null = none) — the staleness check compares it with what the segment should get now.
+
+## `segment_translations.length_warning`
+Text, null = ok. Set when the translation still looked truncated (shorter than 75% of the English) after the length-check retries. Audio generation refuses such a row; the course translation's "missing" mode re-translates it; any successful re-translation clears it.

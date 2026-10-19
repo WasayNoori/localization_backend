@@ -166,7 +166,10 @@ async function runCourseTranslationJob(deps: CourseTranslationJobDeps, job: Proc
         await save("running");
       },
     });
-    const { stopped: _stopped, ...lessonsProgress } = result;
+    const { stopped: _stopped, lengthWarnings, ...lessonsProgress } = result;
+    for (const w of lengthWarnings) {
+      progress.notes!.push({ lessonId: w.lessonId, note: `${w.count} segment translation(s) look truncated after retries — no audio until retranslated; see the lesson page` });
+    }
     progress = { ...progress, ...lessonsProgress, phase: "done" };
     // Settled rule (pipeline-flow.md): any failed lesson → "failed"; succeeded still lists what was done.
     await save(progress.failed.length ? "failed" : "completed");

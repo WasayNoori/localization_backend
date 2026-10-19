@@ -80,10 +80,11 @@ export async function translateQuizQuestions(
       ]
         .filter(Boolean)
         .join(" ");
-      const { translatedTexts } = await translateTexts(deps, { texts: toTranslate.map((t) => t.text), targetLanguage: language, context });
+      const { translatedTexts, lengthWarnings } = await translateTexts(deps, { texts: toTranslate.map((t) => t.text), targetLanguage: language, context });
       toTranslate.forEach((t, k) => {
         if (t.key === "question") row.question = translatedTexts[k];
         else row.answers[t.key] = translatedTexts[k];
+        if (lengthWarnings[k]) row.flags.push(`${t.key === "question" ? "Question" : `Answer ${t.key}`}: ${lengthWarnings[k]}`);
       });
       stats.translated++;
       stats.characters += toTranslate.reduce((n, t) => n + t.text.length, 0);

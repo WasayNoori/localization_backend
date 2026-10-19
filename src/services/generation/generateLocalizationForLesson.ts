@@ -267,11 +267,15 @@ async function resolveTranslatedText(
     .where(and(eq(segmentTranslations.segmentId, segmentId), eq(segmentTranslations.targetLanguage, targetLanguage)))
     .limit(1);
 
-  if (existing) {
+  if (existing && !existing.lengthWarning) {
     return existing.translatedText;
   }
+  if (existing?.lengthWarning) {
+    throw new Error(`${existing.lengthWarning} — no audio made. Retranslate the segment (or run the course translation), then generate again.`);
+  }
 
-  const { translatedText } = await translateAndStoreSegment(deps, segmentId, englishText, targetLanguage, context);
+  const { translatedText, lengthWarning } = await translateAndStoreSegment(deps, segmentId, englishText, targetLanguage, context);
+  if (lengthWarning) throw new Error(`${lengthWarning} — no audio made. Retranslate the segment, then generate again.`);
   return translatedText;
 }
 

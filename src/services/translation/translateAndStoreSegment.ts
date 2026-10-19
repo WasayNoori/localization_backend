@@ -13,6 +13,8 @@ export interface TranslateAndStoreDeps {
 
 export interface TranslateAndStoreResult {
   translatedText: string;
+  /** Still looked truncated after the retries (stored too); null = ok. */
+  lengthWarning: string | null;
 }
 
 /**
@@ -36,8 +38,9 @@ export async function translateAndStoreSegment(
     translatedTexts: [translatedText],
     glossaryId,
     formality,
+    lengthWarnings: [lengthWarning],
   } = await translateTexts(deps, { texts: [englishText], targetLanguage, context: context?.text, customInstructions: guidance });
-  const result = { translatedText };
+  const result = { translatedText, lengthWarning };
 
   const values = {
     translatedText: result.translatedText,
@@ -46,6 +49,7 @@ export async function translateAndStoreSegment(
     formality: formality ?? null,
     billedCharacters: null,
     termGuidance: guidance.length ? guidance : null,
+    lengthWarning,
     // No updated_at column: created_at records when THIS translation was produced.
     createdAt: new Date(),
   };
@@ -58,5 +62,5 @@ export async function translateAndStoreSegment(
       set: values,
     });
 
-  return { translatedText: result.translatedText };
+  return result;
 }

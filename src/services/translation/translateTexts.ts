@@ -4,6 +4,7 @@ import type { ITranslationService } from "../../interfaces/ITranslationService.j
 import type { Formality } from "../../interfaces/ITranslationService.js";
 import { getFormality } from "./getFormality.js";
 import { getGlossaryId } from "./getGlossaryId.js";
+import { lengthWarning } from "./lengthCheck.js";
 
 export interface TranslateTextsDeps {
   db: Database;
@@ -16,6 +17,11 @@ export interface TranslateTextsResult {
   glossaryId: string | undefined;
   /** The language's formality applied (snapshot onto stored rows), if one is set. */
   formality: Formality | undefined;
+  /**
+   * Per text (same order): why the translation still looks truncated after the
+   * retries, or null. Callers flag these; segment audio isn't generated from them.
+   */
+  lengthWarnings: (string | null)[];
 }
 
 /**
@@ -34,15 +40,31 @@ export async function translateTexts(
     getGlossaryId(deps.db, request.targetLanguage),
     getFormality(deps.db, request.targetLanguage),
   ]);
-  if (request.texts.length === 0) return { translatedTexts: [], glossaryId, formality };
-  const { translatedTexts } = await deps.translationService.translateMany({
-    texts: request.texts,
-    targetLanguage: request.targetLanguage,
-    sourceLanguage: "en",
-    glossaryId,
-    context: request.context,
-    formality,
-    customInstructions: request.customInstructions,
-  });
-  return { translatedTexts, glossaryId, formality };
+  if (request.texts.length === 0) return { translatedTexts: [], glossaryId, formality, lengthWarnings: [] };
+  const call = (texts: string[], context: string | undefined) =>
+    deps.translationService.translateMany({
+      texts,
+      targetLanguage: request.targetLanguage,
+      sourceLanguage: "en",
+      glossaryId,
+      context,
+      formality,
+      customInstructions: request.customInstructions,
+    });
+  const { translatedTexts } = await call(request.texts, request.context);
+
+  // Length check: a translation much shorter than its English is retried on its
+  // own — once as sent, once without context — keeping the longest result.
+  const warn = (i: number) => lengthWarning(request.texts[i], translatedTexts[i], request.targetLanguage);
+  const lengthWarnings = request.texts.map((_, i) => warn(i));
+  for (const [i, first] of lengthWarnings.entries()) {
+    if (!first) continue;
+    for (const context of [request.context, undefined]) {
+      const [retry] = (await call([request.texts[i]], context)).translatedTexts;
+      if (retry.length > translatedTexts[i].length) translatedTexts[i] = retry;
+      lengthWarnings[i] = warn(i);
+      if (!lengthWarnings[i]) break;
+    }
+  }
+  return { translatedTexts, glossaryId, formality, lengthWarnings };
 }

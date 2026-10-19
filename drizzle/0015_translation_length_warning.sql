@@ -1,0 +1,1 @@
+ALTER TABLE "segment_translations" ADD COLUMN "length_warning" text;

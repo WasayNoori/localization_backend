@@ -302,6 +302,10 @@ export const segmentTranslations = pgTable(
     // translation's "missing" mode redoes it. Null rows (older translations) are
     // never redone automatically — see docs/decisions.md.
     termGuidance: jsonb("term_guidance").$type<string[]>(),
+    // Set when the translation still looked truncated (much shorter than the
+    // English) after the length-check retries. Audio isn't generated from it,
+    // and the course translation's "missing" mode tries it again. Null = ok.
+    lengthWarning: text("length_warning"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

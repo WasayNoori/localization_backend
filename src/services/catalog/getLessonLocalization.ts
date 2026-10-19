@@ -12,7 +12,8 @@ export interface SegmentLocalization {
   sequenceIndex: number;
   sourceText: string;
   /** Null when not translated yet. For "en" this is the source text itself. */
-  translation: { text: string; translatedAt: Date | null; contextUsed: string | null } | null;
+  /** lengthWarning: the translation still looked truncated after retries — not voiced until retranslated. */
+  translation: { text: string; translatedAt: Date | null; contextUsed: string | null; lengthWarning: string | null } | null;
   /** The current (non-superseded) clip, if any. */
   clip: { id: string; qcStatus: string; qcIssues: string[]; createdAt: Date; generationAttempt: number } | null;
   status: SegmentLocalizationStatus;
@@ -109,9 +110,9 @@ export async function getLessonLocalization(
       const t = translationBySegment.get(s.id);
       const translation =
         language === "en"
-          ? { text: s.text, translatedAt: null, contextUsed: null }
+          ? { text: s.text, translatedAt: null, contextUsed: null, lengthWarning: null }
           : t
-            ? { text: t.translatedText, translatedAt: t.createdAt, contextUsed: t.contextUsed }
+            ? { text: t.translatedText, translatedAt: t.createdAt, contextUsed: t.contextUsed, lengthWarning: t.lengthWarning }
             : null;
       const c = clipBySegment.get(s.id);
       const clip = c

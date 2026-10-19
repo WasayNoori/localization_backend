@@ -200,4 +200,7 @@ separate, explicit call back into the generate loop above (`segmentId` +
    so editing a sense's translation or a decision redoes only the affected
    segments. Translations made without instructions (older ones) are never
    redone because of a term; re-translate by hand to apply terms to them.
+   Every DeepL result also gets the length check (`lengthCheck.ts`): shorter
+   than 75% of the English → retried twice; still short → `length_warning`,
+   not voiced, retried by the next "missing" run.
 Jobs of one course queue (status `pending`) behind each other.

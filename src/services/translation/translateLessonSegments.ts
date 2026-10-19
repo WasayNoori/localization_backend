@@ -38,6 +38,8 @@ export interface TranslateLessonResult {
   titles: { translated: boolean; flagged: boolean; error: string | null };
   /** Ambiguous-term check run before translating; null when no resolver was given. */
   terms: CheckTermsResult | null;
+  /** Segments whose translation still looks truncated after the retries (stored, flagged, not voiced). */
+  lengthWarnings: { segmentId: string; warning: string }[];
 }
 
 /**
@@ -85,12 +87,14 @@ export async function translateLessonSegments(
 
   const translated: string[] = [];
   const errors: { segmentId: string; error: string }[] = [];
+  const lengthWarnings: TranslateLessonResult["lengthWarnings"] = [];
 
   for (const [index, segment] of segments.entries()) {
     if (wanted && !wanted.has(segment.id)) continue;
     try {
-      await translateAndStoreSegment(deps, segment.id, segment.text, targetLanguage, context.forIndex(index));
+      const r = await translateAndStoreSegment(deps, segment.id, segment.text, targetLanguage, context.forIndex(index));
       translated.push(segment.id);
+      if (r.lengthWarning) lengthWarnings.push({ segmentId: segment.id, warning: r.lengthWarning });
     } catch (err) {
       errors.push({ segmentId: segment.id, error: err instanceof Error ? err.message : String(err) });
     }
@@ -112,7 +116,7 @@ export async function translateLessonSegments(
     }
   }
 
-  return { lessonId, targetLanguage, totalSegments: segments.length, translated, errors, audioStale, titles, terms };
+  return { lessonId, targetLanguage, totalSegments: segments.length, translated, errors, audioStale, titles, terms, lengthWarnings };
 }
 
 export class TranslateLessonError extends Error {}
