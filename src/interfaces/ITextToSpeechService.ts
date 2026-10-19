@@ -18,6 +18,12 @@ export interface SynthesizeSpeechRequest {
   previousRequestIds?: string[];
 
   outputFormat?: string; // e.g. "mp3_44100_192"
+
+  /**
+   * The language to speak (lowercase ISO 639-1, e.g. "fr"). Providers apply it
+   * only for models that support forcing a language; others ignore it.
+   */
+  languageCode?: string;
 }
 
 export interface SynthesizeSpeechResult {

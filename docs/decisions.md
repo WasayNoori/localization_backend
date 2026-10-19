@@ -702,3 +702,10 @@ translated and voiced courses therefore don't get re-translated — and their
 audio invalidated — just because a term was added. Re-translating a lesson or
 segment by hand applies the current instructions. Supersedes the staleness
 rule in "Ambiguous terms: senses decided per segment…" above for null rows.
+
+## TTS sends the target language (language_code) for models that support it
+Audio generation passes the lesson's target language to ElevenLabs as
+`language_code`, so short segments dense with English UI names ("click
+PropertyManager") stay in the target language. Sent only for models that
+accept it (v3, v4, Flash/Turbo v2.5); Multilingual v2 doesn't, and may reject
+the request. The model check lives in ElevenLabsTtsService.

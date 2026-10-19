@@ -191,6 +191,8 @@ export async function generateLocalizationForLesson(
         previousText,
         nextText,
         outputFormat: AUDIO_FORMAT,
+        // Keeps short segments full of English UI names in the target language (v4 and other supporting models).
+        languageCode: targetLanguage,
       });
 
       const qc = await deps.qcService.check(synthesized.audio);

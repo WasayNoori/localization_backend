@@ -10,6 +10,10 @@ import type {
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io";
 
+// Models that accept language_code (force the spoken language). Multilingual v2
+// doesn't and may reject the request, so it's only sent for these.
+const LANGUAGE_CODE_MODELS = /^eleven_(v3|v4|flash_v2_5|turbo_v2_5)/;
+
 export class ElevenLabsTtsService implements ITextToSpeechService {
   constructor(private readonly secretsProvider: ISecretsProvider) {}
 
@@ -41,6 +45,7 @@ export class ElevenLabsTtsService implements ITextToSpeechService {
         previous_text: request.previousText,
         next_text: request.nextText,
         previous_request_ids: request.previousRequestIds,
+        ...(request.languageCode && LANGUAGE_CODE_MODELS.test(request.modelId) ? { language_code: request.languageCode } : {}),
       }),
     });
 
