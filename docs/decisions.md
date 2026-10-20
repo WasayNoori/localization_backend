@@ -723,3 +723,12 @@ segment translations store it in `segment_translations.length_warning`
 (audio isn't generated from them; the course translation's "missing" mode
 tries them again), scaffolding items are flagged, quiz rows get a Review Flag.
 Languages that run shorter than English (CJK) aren't checked.
+
+## Script typo check: spacing and punctuation fixes are always applied (2026-10-20)
+A correction that only changes spacing or punctuation — letters and digits,
+case included, unchanged ("don 't" → "don't", "first.Then" → "first. Then",
+"; The" → ": The") — is applied automatically even when the proofreader asked
+for review; only a changed number ("1.5" → "15") still goes to review. The
+prompt now tells Claude not to ask for review on obvious slips (spacing,
+punctuation, doubled words, clear misspellings, a missing article/pronoun).
+Word changes Claude asks about still go to review.

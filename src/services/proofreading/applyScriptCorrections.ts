@@ -12,10 +12,11 @@ export interface ProofreadOutcome {
 }
 
 /**
- * Applies only corrections that are clearly mechanical, whatever the
- * proofreader's confidence: punctuation/spacing, a misspelling (≤2 letters
+ * Applies only corrections that are clearly mechanical: punctuation/spacing
+ * (always, even when the proofreader asked for review — "don 't" → "don't"),
+ * and, unless the proofreader asked for review, a misspelling (≤2 letters
  * off), up to two short inserted words, or removing a doubled / one short
- * word — and never a change to a number. Everything else goes to `review`.
+ * word — never a change to a number. Everything else goes to `review`.
  * Pure: no I/O.
  */
 export function applyScriptCorrections(text: string, corrections: ScriptCorrection[]): ProofreadOutcome {
@@ -25,6 +26,16 @@ export function applyScriptCorrections(text: string, corrections: ScriptCorrecti
     const count = out.text.split(c.original).length - 1;
     if (count !== 1) {
       out.skipped.push({ ...c, why: count === 0 ? "not found exactly in the script" : `found ${count} times` });
+      continue;
+    }
+    // Spacing/punctuation only (letters unchanged, numbers unchanged): always applied.
+    if (punctuationOnly(c.original, c.corrected)) {
+      if (numbers(c.original) !== numbers(c.corrected)) {
+        out.review.push({ ...c, why: "changes a number" });
+        continue;
+      }
+      out.text = out.text.replace(c.original, () => c.corrected);
+      out.applied.push(c);
       continue;
     }
     if (c.needsReview) {
@@ -41,6 +52,19 @@ export function applyScriptCorrections(text: string, corrections: ScriptCorrecti
   }
   return out;
 }
+
+/**
+ * Only spacing or punctuation changes: the letters and digits, case included,
+ * stay the same ("don 't" → "don't", "elements; The" → "elements: The",
+ * "end.Next" → "end. Next"). Capitalization changes are not this.
+ */
+export function punctuationOnly(original: string, corrected: string): boolean {
+  const core = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
+  return core(original) === core(corrected) && original !== corrected;
+}
+
+/** The numbers in a text as written ("1.5 mm, 20" → "1.5 20"), so "1.5" → "15" counts as a change. */
+const numbers = (s: string) => (s.match(/\d+(?:[.,]\d+)*/g) ?? []).join(" ");
 
 const words = (s: string) => (s.match(/[\p{L}\d]+(?:['’][\p{L}]+)*/gu) ?? []).map((w) => w.toLowerCase());
 

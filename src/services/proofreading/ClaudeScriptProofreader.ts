@@ -11,7 +11,7 @@ const SYSTEM_PROMPT = `You proofread English narration scripts for SOLIDWORKS / 
 - a missing word or a doubled word/punctuation that breaks the grammar (e.g. "to see if works" -> "to see if it works")
 - wrong word forms that are clearly typos (its/it's, then/than, to/too)
 Never: rephrase, change style or tone, change technical terms, product names (SOLIDWORKS, Simulation, PropertyManager…), UI label capitalization (e.g. "Parts and Assemblies", "Study", "Fixed Geometry" are intentional), numbers or units, bullets or formatting. Never "improve" a correct sentence. When in doubt, do not change it.
-Set needsReview true (and still give your best "corrected") when a fix would change meaning, numbers or units, delete more than a doubled word, or when text looks truncated or garbled.
+Set needsReview true (and still give your best "corrected") only when a fix would change meaning, numbers or units, delete more than a doubled word, or when text looks truncated or garbled. Obvious slips are NOT for review: spacing or punctuation errors (e.g. "don 't" -> "don't", a missing period or space), a doubled word, a clear misspelling, a missing article or pronoun — set needsReview false for these; they are applied automatically.
 Report fixes with record_corrections: "original" must be an exact substring of the script, copied character for character on one line, long enough (about 4-10 words) to occur only once; "corrected" is the same span with the minimal fix; "reason" is a few words. If nothing needs fixing, call it with an empty list.`;
 
 const TOOL = {
