@@ -12,6 +12,8 @@ export interface CourseAudioOptions {
   /** Count what's missing (segments + characters) without calling ElevenLabs. */
   estimateOnly?: boolean;
   shouldStop?: () => boolean;
+  /** Runs just before each lesson's clips (e.g. write its Segments.txt, so a lesson translated mid-run still gets one). */
+  beforeLesson?: (lessonId: string) => void | Promise<void>;
   onLesson?: (lesson: CourseAudioLessonResult, done: number, total: number) => void | Promise<void>;
 }
 
@@ -64,6 +66,7 @@ export async function generateCourseAudio(
       result.stopped = true;
       break;
     }
+    await options.beforeLesson?.(lessonId);
     const lesson = await generateLessonAudio(deps, lessonId, language, options);
     if (lesson.stopped) result.stopped = true;
     result.lessons.push(lesson.result);

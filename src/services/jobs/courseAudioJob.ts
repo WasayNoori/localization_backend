@@ -27,12 +27,14 @@ export class CourseAudioJobError extends Error {
 /**
  * Starts "generate the audio for this course in one language" as a
  * processing_jobs row (type "generate") and runs it in this process. Returns
- * the job at once; poll GET /jobs/:jobId. Into the course's Box folder:
- *   1. "<Language> Segments.txt" for every lesson (unchanged files are skipped),
- *   2. the missing clips — the same per-lesson generate loop as the lesson
- *      endpoint, so re-running continues where it stopped.
- * Lessons not fully translated are skipped (no DeepL calls). One active job
- * per course + language.
+ * the job at once; poll GET /jobs/:jobId. Into the course's Box folder, per
+ * lesson: "<Language> Segments.txt", then the missing clips — the same
+ * per-lesson generate loop as the lesson endpoint, so re-running continues
+ * where it stopped. Writing each lesson's file right before its clips means a
+ * lesson whose translation finished mid-run still gets one. `segmentsOnly`
+ * writes the Segments.txt files and stops (no voice needed, no ElevenLabs,
+ * no audit). Lessons not fully translated are skipped (no DeepL calls). One
+ * active job per course + language (either kind — they write the same files).
  */
 /**
  * Audio jobs of one course run one after another, in the order requested
@@ -42,13 +44,23 @@ export class CourseAudioJobError extends Error {
  */
 const courseAudioQueues = new Map<string, Promise<void>>();
 
-export async function startCourseAudioJob(deps: CourseAudioJobDeps, courseId: string, language: string): Promise<ProcessingJob> {
+export interface CourseAudioJobOptions {
+  /** Write the Segments.txt files only — no clips, no audit. */
+  segmentsOnly?: boolean;
+}
+
+export async function startCourseAudioJob(
+  deps: CourseAudioJobDeps,
+  courseId: string,
+  language: string,
+  options: CourseAudioJobOptions = {}
+): Promise<ProcessingJob> {
   const { db } = deps;
   const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
   if (!course) throw new CourseAudioJobError(404, `No course with id "${courseId}"`);
   if (!course.boxFolderId) throw new CourseAudioJobError(400, `Course "${courseId}" has no Box folder — set it on the course page`);
   // Fails here (400) for a language without a voice, rather than inside the job.
-  await deps.voiceSettingsProvider.getSettings(language);
+  if (!options.segmentsOnly) await deps.voiceSettingsProvider.getSettings(language);
 
   const [active] = await db
     .select()
@@ -74,13 +86,13 @@ export async function startCourseAudioJob(deps: CourseAudioJobDeps, courseId: st
       type: "generate",
       targetLanguage: language,
       status: "pending",
-      progress: { total, succeeded: [], failed: [], skipped: [], phase: "queued", options: { boxFolderId: course.boxFolderId } },
+      progress: { total, succeeded: [], failed: [], skipped: [], phase: "queued", options: { boxFolderId: course.boxFolderId, ...(options.segmentsOnly ? { segmentsOnly: "true" } : {}) } },
     })
     .returning();
 
   const boxFolderId = course.boxFolderId;
   const previous = courseAudioQueues.get(courseId) ?? Promise.resolve();
-  const mine = previous.then(() => runCourseAudioJob(deps, job, boxFolderId)).catch(() => {
+  const mine = previous.then(() => runCourseAudioJob(deps, job, boxFolderId, options.segmentsOnly === true)).catch(() => {
     // runCourseAudioJob records its own failure.
   });
   courseAudioQueues.set(courseId, mine);
@@ -90,24 +102,43 @@ export async function startCourseAudioJob(deps: CourseAudioJobDeps, courseId: st
   return job;
 }
 
-async function runCourseAudioJob(deps: CourseAudioJobDeps, job: ProcessingJob, boxFolderId: string): Promise<void> {
+async function runCourseAudioJob(deps: CourseAudioJobDeps, job: ProcessingJob, boxFolderId: string, segmentsOnly: boolean): Promise<void> {
   const { db } = deps;
   const language = job.targetLanguage!;
-  let progress: ProcessingJobProgress = { ...job.progress, phase: "generating", stats: { segmentFiles: 0, clips: 0, characters: 0 } };
+  let progress: ProcessingJobProgress = {
+    ...job.progress,
+    phase: segmentsOnly ? "writing Segments.txt" : "generating",
+    stats: segmentsOnly ? { segmentFiles: 0 } : { segmentFiles: 0, clips: 0, characters: 0 },
+  };
   const save = (status: string) =>
     db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
+  const outputStore = new BoxLessonOutputStore(deps.fileStorageService, boxFolderId);
+  /** Writes Segments.txt for the given lessons (default: all); a file not written is listed with why. */
+  const writeSegments = async (lessonIds?: string[]) => {
+    const result = await writeCourseSegmentsFiles({ db, outputStore }, job.targetId, { languages: [language], courseFolder: job.targetId, lessonIds });
+    progress.stats!.segmentFiles += result.written.length;
+    return result;
+  };
 
   try {
     await save("running");
-    const segments = await writeCourseSegmentsFiles(
-      { db, outputStore: new BoxLessonOutputStore(deps.fileStorageService, boxFolderId) },
-      job.targetId,
-      { languages: [language], courseFolder: job.targetId }
-    );
-    progress = { ...progress, stats: { ...progress.stats, segmentFiles: segments.written.length } };
-    await save("running");
+    if (segmentsOnly) {
+      const result = await writeSegments();
+      progress = {
+        ...progress,
+        succeeded: result.written.map((w) => w.lessonId),
+        skipped: result.skipped.map((s) => ({ lessonId: s.lessonId, reason: `Segments.txt not written: ${s.reason}` })),
+        phase: "done",
+      };
+      await save("completed");
+      return;
+    }
 
     await generateCourseAudio({ ...deps, clipStore: new BoxClipStore(deps.fileStorageService), boxFolderId, courseFolder: null }, job.targetId, language, {
+      beforeLesson: async (lessonId) => {
+        // Not written = the lesson is skipped below too (not parsed / not fully translated), with that reason.
+        await writeSegments([lessonId]);
+      },
       onLesson: async (lesson) => {
         const stats = progress.stats!;
         stats.clips += lesson.generated;

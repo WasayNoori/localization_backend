@@ -404,9 +404,11 @@ export async function coursesRoute(app: FastifyInstance) {
       preValidation: defaultEmptyBody,
       schema: {
         description:
-          "Course-level audio job for one language ('en' included), into the course's Box folder: writes " +
-          "'<Language> Segments.txt' per lesson (unchanged files skipped), then generates every missing clip " +
+          "Course-level audio job for one language ('en' included), into the course's Box folder: per lesson, " +
+          "writes '<Language> Segments.txt' (unchanged files skipped), then generates every missing clip " +
           "with the language's voice settings — <LANG>/<lessonId>/<Language> Clips/<lessonId>_<lang>_NNN.mp3. " +
+          "{ segmentsOnly: true } writes the Segments.txt files only (no voice needed, no clips, no audit; " +
+          "files not written are in skipped). " +
           "Lessons not fully translated are skipped (never calls DeepL). Async — 202 { jobId }; poll " +
           "GET /jobs/:jobId (progress: succeeded, failed, skipped, stats { segmentFiles, clips, characters }). " +
           "Re-running continues where it stopped. 400 no Box folder / no voice for the language, 404 unknown " +
@@ -417,7 +419,7 @@ export async function coursesRoute(app: FastifyInstance) {
           required: ["courseId", "targetLanguage"],
           properties: { courseId: { type: "string" }, targetLanguage: { type: "string" } },
         },
-        body: { type: "object", additionalProperties: false, properties: {} },
+        body: { type: "object", additionalProperties: false, properties: { segmentsOnly: { type: "boolean" } } },
       },
     },
     async (request, reply) => {
@@ -433,7 +435,8 @@ export async function coursesRoute(app: FastifyInstance) {
             voiceSettingsProvider: app.voiceSettingsProvider,
           },
           courseId,
-          targetLanguage.toLowerCase()
+          targetLanguage.toLowerCase(),
+          { segmentsOnly: (request.body as { segmentsOnly?: boolean }).segmentsOnly === true }
         );
         return reply.code(202).send({ jobId: job.id, job });
       } catch (err) {

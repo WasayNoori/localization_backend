@@ -732,3 +732,12 @@ for review; only a changed number ("1.5" → "15") still goes to review. The
 prompt now tells Claude not to ask for review on obvious slips (spacing,
 punctuation, doubled words, clear misspellings, a missing article/pronoun).
 Word changes Claude asks about still go to review.
+
+## Course audio: Segments.txt per lesson, and a Segments.txt-only job (2026-10-20)
+The audio job wrote every lesson's Segments.txt up front, then the clips. A
+lesson whose translation finished after the job started got clips but no
+Segments.txt (24SWAdvAssy ES), and the audit failed. Each lesson's file is now
+written right before its clips. `segmentsOnly` on the same endpoint writes the
+Segments.txt files and stops — for when the text files are wanted in Box
+without audio. Same job type and same one-active-job rule, since both write
+the same files; not a separate endpoint (same actor, a subset of the steps).
