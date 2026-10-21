@@ -741,3 +741,11 @@ written right before its clips. `segmentsOnly` on the same endpoint writes the
 Segments.txt files and stops — for when the text files are wanted in Box
 without audio. Same job type and same one-active-job rule, since both write
 the same files; not a separate endpoint (same actor, a subset of the steps).
+
+## Course outline Excel goes straight to Box (2026-10-21)
+The outline workbook was downloaded and then copied into Box by hand. The
+console still builds it (the workbook code lives there), then uploads the
+bytes to `PUT /courses/:id/outputs/outline/:lang`, which saves it in the
+course's language folder under the name already used there. Same name → a
+new Box version rather than a second file. Building it on the server instead
+would mean moving the exporter; not worth it for one file.

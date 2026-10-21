@@ -52,3 +52,6 @@ export const clipFilePath = (t: LessonOutputTarget, segmentNumber: number): stri
 export function formatSegmentsText(texts: string[]): string {
   return texts.map((text, i) => `${String(i + 1).padStart(3, "0")}\r\n${text}`).join("\r\n\r\n") + "\r\n";
 }
+
+/** e.g. "25SWEssParts Outline ES.xlsx" — the course outline workbook, in the course's language folder. */
+export const outlineFileName = (courseId: string, language: string): string => `${courseId} Outline ${languageFolder(language)}.xlsx`;

@@ -13,6 +13,7 @@ import { coursesRoute } from "./courses.route.js";
 import { segmentsRoute } from "./segments.route.js";
 import { clipsRoute } from "./clips.route.js";
 import { termsRoute } from "./terms.route.js";
+import { courseOutlineRoute } from "./course-outline.route.js";
 
 export async function routes(app: FastifyInstance) {
   await app.register(healthRoute);
@@ -29,4 +30,5 @@ export async function routes(app: FastifyInstance) {
   await app.register(segmentsRoute);
   await app.register(clipsRoute);
   await app.register(termsRoute);
+  await app.register(courseOutlineRoute);
 }
