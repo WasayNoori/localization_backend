@@ -749,3 +749,13 @@ bytes to `PUT /courses/:id/outputs/outline/:lang`, which saves it in the
 course's language folder under the name already used there. Same name → a
 new Box version rather than a second file. Building it on the server instead
 would mean moving the exporter; not worth it for one file.
+
+## The course audit also checks the outline and the quiz (2026-10-21)
+A course is done in a language only when, besides the audio, its outline is
+translated (and current) with the workbook in Box, and the quiz workbook is
+in Box. Both are problems, so they fail the audit — and the audio job that
+runs it. English is skipped (the source). Course-level checks are an
+interface (`ICourseAuditCheck`) collected in `app.courseAuditChecks`: the
+outline check lives in core; the quiz module adds its own, so the module
+stays detachable and the audit never imports it. The quiz module stores
+nothing about quizzes, so "done" = its workbook is in Box.

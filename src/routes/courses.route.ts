@@ -433,6 +433,7 @@ export async function coursesRoute(app: FastifyInstance) {
             qcService: app.qcService,
             fileStorageService: app.fileStorageService,
             voiceSettingsProvider: app.voiceSettingsProvider,
+            courseAuditChecks: app.courseAuditChecks,
           },
           courseId,
           targetLanguage.toLowerCase(),
@@ -473,7 +474,7 @@ export async function coursesRoute(app: FastifyInstance) {
     async (request, reply) => {
       const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
       try {
-        return reply.send(await auditCourseAudio({ db: app.db, fileStorageService: app.fileStorageService }, courseId, targetLanguage.toLowerCase()));
+        return reply.send(await auditCourseAudio({ db: app.db, fileStorageService: app.fileStorageService, courseAuditChecks: app.courseAuditChecks }, courseId, targetLanguage.toLowerCase()));
       } catch (err) {
         if (err instanceof AuditError) {
           return reply.code(err.statusCode).send({ error: err.statusCode === 404 ? "NotFound" : "BadRequest", message: err.message });

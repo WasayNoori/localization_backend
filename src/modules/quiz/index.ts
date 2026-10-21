@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { BoxQuizWorkbookStore } from "./BoxQuizWorkbookStore.js";
 import { DbQuizCourseContext } from "./DbQuizCourseContext.js";
 import { MondayQuizSource } from "./MondayQuizSource.js";
+import { QuizWorkbookAuditCheck } from "./QuizWorkbookAuditCheck.js";
 import { quizRoutes } from "./quiz.route.js";
 import type { QuizJobDeps } from "./quizTranslationJob.js";
 
@@ -19,5 +20,7 @@ export async function quizModule(app: FastifyInstance): Promise<void> {
     source: new MondayQuizSource(app.mondayBoardReader),
     output: new BoxQuizWorkbookStore(app.fileStorageService),
   };
+  // The course audit also checks the quiz workbook is in Box (translated languages).
+  app.courseAuditChecks.push(new QuizWorkbookAuditCheck());
   await app.register(quizRoutes(deps));
 }

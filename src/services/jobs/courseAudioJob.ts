@@ -2,6 +2,7 @@
 import { auditCourseAudio } from "../audit/auditCourseAudio.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { courses, processingJobs, type ProcessingJobProgress } from "../../db/schema.js";
+import type { ICourseAuditCheck } from "../../interfaces/ICourseAuditCheck.js";
 import type { IFileStorageService } from "../../interfaces/IFileStorageService.js";
 import { generateCourseAudio } from "../generation/generateCourseAudio.js";
 import type { GenerateLocalizationDeps } from "../generation/generateLocalizationForLesson.js";
@@ -13,6 +14,8 @@ import { JobConflictError, type ProcessingJob } from "./courseTranslationJob.js"
 
 export type CourseAudioJobDeps = Omit<GenerateLocalizationDeps, "clipStore" | "boxFolderId" | "courseFolder"> & {
   fileStorageService: IFileStorageService;
+  /** Course-level audit checks (outline, quiz…) — see auditCourseAudio. */
+  courseAuditChecks?: ICourseAuditCheck[];
 };
 
 export class CourseAudioJobError extends Error {

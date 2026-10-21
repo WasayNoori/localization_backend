@@ -3,12 +3,15 @@ import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { courses, lessonSegments, ttsClips } from "../../db/schema.js";
 import type { IFileStorageService, StoredItem } from "../../interfaces/IFileStorageService.js";
+import type { ICourseAuditCheck } from "../../interfaces/ICourseAuditCheck.js";
 import { courseLessonOrder } from "../translation/translateCourseLessons.js";
 import { clipFileName, clipsDirInCourse, languageFolder, lessonDirInCourse, segmentsFileName } from "../output/outputLayout.js";
 
 export interface AuditCourseAudioDeps {
   db: Database;
   fileStorageService: IFileStorageService;
+  /** Course-level checks run besides audio (app.courseAuditChecks: outline, quiz…). */
+  courseAuditChecks?: ICourseAuditCheck[];
 }
 
 export interface CourseAudioAudit {
@@ -38,7 +41,10 @@ export class AuditError extends Error {
  * Box has the lesson folder, its Segments.txt and exactly the clips
  * 001…N — each the file the database points to. Also warns about gaps in
  * lesson numbering (25Sim03_01, 25Sim03_03 — no 03_02) and lesson folders in
- * Box that aren't in the course. Reads Box fresh; changes nothing.
+ * Box that aren't in the course. Then the course-level checks (outline
+ * translated and in Box, quiz workbook in Box — translated languages only);
+ * their findings have no lessonId and start with the check's name. Reads Box
+ * fresh; changes nothing.
  */
 export async function auditCourseAudio(deps: AuditCourseAudioDeps, courseId: string, language: string): Promise<CourseAudioAudit> {
   const { db, fileStorageService: box } = deps;
@@ -60,6 +66,16 @@ export async function auditCourseAudio(deps: AuditCourseAudioDeps, courseId: str
   const lessonIds = await courseLessonOrder(db, courseId);
   audit.lessons = lessonIds.length;
   audit.warnings.push(...numberingGaps(lessonIds).map((warning) => ({ warning })));
+
+  for (const check of deps.courseAuditChecks ?? []) {
+    try {
+      const found = await check.check({ db, fileStorageService: box, course: { id: course.id, boxFolderId: course.boxFolderId, mondayBoardId: course.mondayBoardId }, language });
+      audit.problems.push(...found.problems.map((p) => ({ problem: `${check.name}: ${p}` })));
+      audit.warnings.push(...found.warnings.map((w) => ({ warning: `${check.name}: ${w}` })));
+    } catch (err) {
+      audit.problems.push({ problem: `${check.name}: check couldn't run — ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
 
   const languageFolderId = await box.findFolderPath(course.boxFolderId, [languageFolder(language)]);
   if (!languageFolderId) {

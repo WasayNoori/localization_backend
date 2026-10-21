@@ -35,6 +35,9 @@ export interface Secrets {
   databaseUrl: string;
 }
 
+import type { ICourseAuditCheck } from "../interfaces/ICourseAuditCheck.js";
+import { OutlineAuditCheck } from "../services/audit/OutlineAuditCheck.js";
+
 declare module "fastify" {
   interface FastifyInstance {
     secretsProvider: ISecretsProvider;
@@ -56,6 +59,8 @@ declare module "fastify" {
     lessonOutputStore: ILessonOutputStore | null;
     /** monday.com, read-only (course boards). */
     mondayBoardReader: IMondayBoardReader;
+    /** Course-level audit checks besides audio (outline, quiz…); modules add theirs. */
+    courseAuditChecks: ICourseAuditCheck[];
     // decorate with concrete service implementations as they're built, ...
   }
 }
@@ -105,4 +110,5 @@ export const container = fp(async (app: FastifyInstance) => {
   app.decorate("lessonOutputStore", lessonOutputStore);
 
   app.decorate("mondayBoardReader", new MondayBoardReader(secretsProvider));
+  app.decorate("courseAuditChecks", [new OutlineAuditCheck()] as ICourseAuditCheck[]);
 });

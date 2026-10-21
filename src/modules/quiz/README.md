@@ -16,7 +16,9 @@ fresh file.
 3. **Output** — `BoxQuizWorkbookStore`: `<LANG>/Quiz Questions/<courseId> Quiz Questions <LANG>.xlsx` in the
    course's Box folder (replaced each run; Box keeps versions). Translated columns, then English, Image URL,
    Review Flag; an "About" sheet.
-4. **Job** — `quizTranslationJob`: a `processing_jobs` row, type `quiz`, queued per course; poll `GET /jobs/:id`.
+4. **Audit** — `QuizWorkbookAuditCheck` (added to `app.courseAuditChecks`): the course audit fails for a
+   translated language whose workbook isn't in Box.
+5. **Job** — `quizTranslationJob`: a `processing_jobs` row, type `quiz`, queued per course; poll `GET /jobs/:id`.
 
 ## Endpoints
 - `GET /courses/:courseId/quiz` — reads the source and returns counts (no translation).
@@ -29,6 +31,6 @@ fresh file.
 ## Plugging in / taking out
 - In: `await app.register(quizModule)` in `src/app.ts` — the module wires its own dependencies from services the
   app already exposes (translation, reviewer, Box, secrets, db). No other code imports from this folder.
-- Out: delete this folder and that line (frontend: `src/lib/modules/quiz` and its line on the course page).
+- Out: delete this folder and that line (its audit check goes with it) (frontend: `src/lib/modules/quiz` and its line on the course page).
   `courses.monday_board_id` stays — it's general course data. The shared reviewer's `quizQuestion`/`quizAnswer`
   kinds are harmless leftovers.
