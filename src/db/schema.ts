@@ -253,6 +253,8 @@ export const processingJobs = pgTable("processing_jobs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export type SegmentGranularity = "segment" | "sentence";
+
 // The English spaCy output. One row per ~300-400 character segment per
 // lesson, shared across every target language. No course_id here and no FK
 // to lessons — see docs/decisions.md ("lesson_segments.course_id dropped")
@@ -265,6 +267,12 @@ export const lessonSegments = pgTable(
     lessonId: text("lesson_id").notNull(),
     sequenceIndex: integer("sequence_index").notNull(),
     text: text("text").notNull(),
+    // How the lesson was parsed: "segment" (sentences packed into ~85-250
+    // characters, the default) or "sentence" (one sentence per row, for
+    // tighter video sync). Every row of a lesson has the same value; the rest
+    // of the pipeline treats both the same. A re-parse keeps the lesson's value
+    // unless another is asked for.
+    granularity: text("granularity").$type<SegmentGranularity>().notNull().default("segment"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

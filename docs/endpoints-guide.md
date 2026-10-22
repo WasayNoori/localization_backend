@@ -225,8 +225,17 @@ Box via `boxFileId` only when `script_text` is null), splits it via
 spaCy, and rewrites `lesson_segments` for the lesson inside one transaction
 (cascading to delete existing `segment_translations`/`tts_clips` — see
 `docs/decisions.md` on re-parse being destructive). Requires the lesson to
-have `script_text` (via `PUT /courses/:courseId/scripts`) or a `boxFileId`. Returns
-`{ lessonId, segmentCount, parsedAt }`.
+have `script_text` (via `PUT /courses/:courseId/scripts`) or a `boxFileId`.
+Optional body `{ type: "segment" | "sentence" }`: `segment` packs sentences into
+~85–250 character segments; `sentence` makes one segment per sentence (tighter
+video sync). Omitted = what the lesson was parsed with last (`segment` if
+never), so re-parses — including the translation job's automatic ones — keep
+a sentence lesson in sentences. Stored per row in `lesson_segments.granularity`
+and shown as `granularity` on the lesson (course structure, lesson
+localization). Everything downstream (translation, audio, Segments.txt, audit)
+treats both the same. Needs a spaCy service with the granularity option — an
+older one fails the parse rather than silently returning segments. Returns
+`{ lessonId, segmentCount, granularity, parsedAt }`.
 
 ---
 

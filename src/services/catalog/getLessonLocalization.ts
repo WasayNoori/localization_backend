@@ -29,6 +29,8 @@ export interface LessonLocalization {
     hasScript: boolean;
     parsedAt: Date | null;
     parseStale: boolean;
+    /** "segment" or "sentence" — how the lesson was parsed; null = not parsed. */
+    granularity: "segment" | "sentence" | null;
     tags: string[];
     /** The lesson's name/description in this language; null if not translated (always null for "en"). */
     translation: {
@@ -95,6 +97,7 @@ export async function getLessonLocalization(
       hasScript: lesson.scriptText !== null || lesson.boxFileId !== null,
       parsedAt: lesson.parsedAt,
       parseStale: !!(lesson.parsedAt && lesson.scriptUpdatedAt && lesson.scriptUpdatedAt > lesson.parsedAt),
+      granularity: segments[0]?.granularity ?? null,
       tags: lesson.tags,
       translation: titleRow
         ? {

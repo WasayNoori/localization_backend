@@ -67,6 +67,9 @@ language_voice_settings (looked up by target_language, not FK-joined)
 - A **lesson** is an independent block that can belong to more than one
   course (via `course_lessons`), and holds the pointer to its English
   source script in Box.
+- `lesson_segments.granularity` (`segment` | `sentence`, default `segment`):
+  how the lesson was parsed. All rows of a lesson share one value; a
+  `sentence` lesson has one sentence per row. Nothing downstream branches on it.
 - A **lesson_segment** is one ~300–400 character chunk from a lesson's
   English script, as grouped by spaCy (may span multiple sentences).
   Created once per lesson; shared across every target language.

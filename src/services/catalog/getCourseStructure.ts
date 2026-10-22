@@ -22,6 +22,8 @@ export interface CourseStructureLesson {
   boxFileId: string | null;
   parsedAt: Date | null;
   segmentCount: number;
+  /** "segment" or "sentence" — how the lesson was parsed; null = not parsed. */
+  granularity: "segment" | "sentence" | null;
   /** Script changed after the last parse — segments were cut from an older script. */
   parseStale: boolean;
   /** Per-language counts; languages with no work yet are absent (treat as zero). */
@@ -118,6 +120,7 @@ export async function getCourseStructure(db: Database, courseId: string): Promis
       boxFileId: l.boxFileId,
       parsedAt: l.parsedAt,
       segmentCount: coverage.get(l.id)!.segmentCount,
+      granularity: coverage.get(l.id)!.granularity,
       parseStale: !!(l.parsedAt && l.scriptUpdatedAt && l.scriptUpdatedAt > l.parsedAt),
       localization: coverage.get(l.id)!.languages,
       tags: l.tags,

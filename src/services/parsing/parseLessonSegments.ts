@@ -1,7 +1,7 @@
 // src/services/parsing/parseLessonSegments.ts
 import { eq } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { lessons, lessonSegments } from "../../db/schema.js";
+import { lessons, lessonSegments, type SegmentGranularity } from "../../db/schema.js";
 import type { IFileStorageService } from "../../interfaces/IFileStorageService.js";
 import type { INlpService } from "../../interfaces/INlpService.js";
 
@@ -15,6 +15,7 @@ export interface ParseLessonDeps {
 export interface ParseLessonResult {
   lessonId: string;
   segmentCount: number;
+  granularity: SegmentGranularity;
   parsedAt: Date;
 }
 
@@ -24,8 +25,17 @@ export interface ParseLessonResult {
  * lesson inside one transaction. Re-parsing always replaces prior segments,
  * cascading to delete their segment_translations/tts_clips — a deliberate,
  * destructive, expensive-to-redo operation (see docs/decisions.md).
+ *
+ * `granularity`: "segment" (sentences packed into ~85-250 characters) or
+ * "sentence" (one row per sentence). Omitted = whatever the lesson was parsed
+ * with last ("segment" for a lesson never parsed), so automatic re-parses
+ * never switch a sentence lesson back to segments.
  */
-export async function parseLessonSegments(deps: ParseLessonDeps, lessonId: string): Promise<ParseLessonResult> {
+export async function parseLessonSegments(
+  deps: ParseLessonDeps,
+  lessonId: string,
+  options: { granularity?: SegmentGranularity } = {}
+): Promise<ParseLessonResult> {
   const { db } = deps;
 
   const [lesson] = await db.select().from(lessons).where(eq(lessons.id, lessonId)).limit(1);
@@ -34,7 +44,8 @@ export async function parseLessonSegments(deps: ParseLessonDeps, lessonId: strin
   }
   const text = await loadScriptText(deps, lesson);
 
-  const { sentences } = await deps.nlpService.segment(text);
+  const granularity = options.granularity ?? (await currentGranularity(db, lessonId)) ?? "segment";
+  const { sentences } = await deps.nlpService.segment(text, { granularity });
   const parsedAt = new Date();
 
   await db.transaction(async (tx) => {
@@ -46,6 +57,7 @@ export async function parseLessonSegments(deps: ParseLessonDeps, lessonId: strin
           lessonId,
           sequenceIndex: index,
           text: sentenceText,
+          granularity,
         }))
       );
     }
@@ -53,7 +65,17 @@ export async function parseLessonSegments(deps: ParseLessonDeps, lessonId: strin
     await tx.update(lessons).set({ parsedAt, updatedAt: parsedAt }).where(eq(lessons.id, lessonId));
   });
 
-  return { lessonId, segmentCount: sentences.length, parsedAt };
+  return { lessonId, segmentCount: sentences.length, granularity, parsedAt };
+}
+
+/** How the lesson's current rows were cut; null when it has none. */
+export async function currentGranularity(db: Database, lessonId: string): Promise<SegmentGranularity | null> {
+  const [row] = await db
+    .select({ granularity: lessonSegments.granularity })
+    .from(lessonSegments)
+    .where(eq(lessonSegments.lessonId, lessonId))
+    .limit(1);
+  return row?.granularity ?? null;
 }
 
 /**

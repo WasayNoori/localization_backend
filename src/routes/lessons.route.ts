@@ -1,5 +1,6 @@
 // src/routes/lessons.route.ts
 import { courseBoxFolderForLesson, LessonCourseError } from "../services/catalog/courseBoxFolderForLesson.js";
+import type { SegmentGranularity } from "../db/schema.js";
 import type { FastifyInstance } from "fastify";
 import { VoiceNotConfiguredError } from "../interfaces/IvoiceSettingsProvider.js";
 import { eq } from "drizzle-orm";
@@ -65,7 +66,11 @@ export async function lessonsRoute(app: FastifyInstance) {
           "Parses a lesson's English script (lessons.script_text, falling back to Box via boxFileId) into lesson_segments via " +
           "spaCy — one transaction, rewriting all segments for the lesson. Re-parsing is destructive: it " +
           "cascades to delete existing segment_translations/tts_clips for this lesson across every " +
-          "language. Requires scriptText (PUT /courses/:courseId/scripts) or boxFileId to be set.",
+          "language. Requires scriptText (PUT /courses/:courseId/scripts) or boxFileId to be set. Body " +
+          "{ type?: 'segment' | 'sentence' }: 'segment' packs sentences into ~85-250 character segments, " +
+          "'sentence' makes one segment per sentence (tighter video sync). Omitted = what the lesson was " +
+          "parsed with last ('segment' if never). Everything downstream treats both the same. Returns " +
+          "{ lessonId, segmentCount, granularity, parsedAt }.",
         security: [{ apiKey: [] }],
         params: {
           type: "object",
@@ -74,10 +79,17 @@ export async function lessonsRoute(app: FastifyInstance) {
             lessonId: { type: "string" },
           },
         },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: { type: { type: "string", enum: ["segment", "sentence"] } },
+        },
       },
+      preValidation: defaultEmptyBody,
     },
     async (request, reply) => {
       const { lessonId } = request.params as { lessonId: string };
+      const { type } = request.body as { type?: SegmentGranularity };
 
       try {
         const result = await parseLessonSegments(
@@ -86,7 +98,8 @@ export async function lessonsRoute(app: FastifyInstance) {
             fileStorageService: app.fileStorageService,
             nlpService: app.nlpService,
           },
-          lessonId
+          lessonId,
+          { granularity: type }
         );
 
         return reply.send(result);

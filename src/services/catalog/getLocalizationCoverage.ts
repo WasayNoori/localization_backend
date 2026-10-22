@@ -1,7 +1,7 @@
 // src/services/catalog/getLocalizationCoverage.ts
-import { and, count, countDistinct, eq, inArray } from "drizzle-orm";
+import { and, count, countDistinct, eq, inArray, min } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { lessonSegments, segmentTranslations, ttsClips } from "../../db/schema.js";
+import { lessonSegments, segmentTranslations, ttsClips, type SegmentGranularity } from "../../db/schema.js";
 
 export interface LanguageCoverage {
   language: string;
@@ -13,6 +13,8 @@ export interface LanguageCoverage {
 
 export interface LessonCoverage {
   segmentCount: number;
+  /** How the lesson was parsed; null = not parsed. */
+  granularity: SegmentGranularity | null;
   languages: LanguageCoverage[];
 }
 
@@ -30,7 +32,7 @@ export async function getLocalizationCoverage(
 
   const [segmentCounts, translationCounts, audioCounts] = await Promise.all([
     db
-      .select({ lessonId: lessonSegments.lessonId, n: count() })
+      .select({ lessonId: lessonSegments.lessonId, n: count(), granularity: min(lessonSegments.granularity) })
       .from(lessonSegments)
       .where(inArray(lessonSegments.lessonId, lessonIds))
       .groupBy(lessonSegments.lessonId),
@@ -49,10 +51,11 @@ export async function getLocalizationCoverage(
   ]);
 
   for (const id of lessonIds) {
-    result.set(id, { segmentCount: 0, languages: [] });
+    result.set(id, { segmentCount: 0, granularity: null, languages: [] });
   }
   for (const row of segmentCounts) {
     result.get(row.lessonId)!.segmentCount = Number(row.n);
+    result.get(row.lessonId)!.granularity = (row.granularity as SegmentGranularity | null) ?? null;
   }
 
   const languageEntry = (lessonId: string, language: string): LanguageCoverage => {

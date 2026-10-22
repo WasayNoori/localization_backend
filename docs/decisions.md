@@ -759,3 +759,16 @@ interface (`ICourseAuditCheck`) collected in `app.courseAuditChecks`: the
 outline check lives in core; the quiz module adds its own, so the module
 stays detachable and the audit never imports it. The quiz module stores
 nothing about quizzes, so "done" = its workbook is in Box.
+
+## Sentence-level parsing as an option, not a second pipeline (2026-10-22)
+Syncing translated audio to the German videos needs finer pieces than
+segments. Instead of a sentences table with its own translations and clips,
+a lesson can be parsed with `type: "sentence"`: each row of lesson_segments
+is then one sentence, tagged `granularity = 'sentence'`. Translation, audio,
+Segments.txt, the audit and Box layout run unchanged — a "segment" may simply
+be one sentence. One set of rows per lesson, so switching re-parses (and,
+like any re-parse, deletes that lesson's translations and clips). A re-parse
+without a type keeps the lesson's current granularity, so automatic re-parses
+don't silently undo it. The split itself is the spaCy service's existing
+sentence split with the 85–250 character packing skipped; it echoes the
+granularity so an older service fails loudly instead of returning segments.

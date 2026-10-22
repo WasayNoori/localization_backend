@@ -1,0 +1,1 @@
+ALTER TABLE "lesson_segments" ADD COLUMN "granularity" text DEFAULT 'segment' NOT NULL;
