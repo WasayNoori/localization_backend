@@ -772,3 +772,11 @@ without a type keeps the lesson's current granularity, so automatic re-parses
 don't silently undo it. The split itself is the spaCy service's existing
 sentence split with the 85–250 character packing skipped; it echoes the
 granularity so an older service fails loudly instead of returning segments.
+
+## The course translation job can choose the split, but never switches translated lessons (2026-10-22)
+`parseType` on the course translation job sets how the lessons it parses
+are split. It re-splits a lesson parsed the other way only when nothing is
+lost (no translations or audio in any language); otherwise the lesson is
+kept and named in the job's notes. Switching a translated lesson is a
+per-lesson, confirmed action on the lesson page, like any destructive
+re-parse.

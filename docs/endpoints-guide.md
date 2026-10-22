@@ -40,7 +40,12 @@ at a time, in course order. Body (optional): `{ mode: "missing" | "all" }`.
 `missing` (default) sends only segments with no translation in that
 language — so a re-run continues an interrupted or partly failed job; whole
 untranslated lessons also get their missing name/description. `all`
-re-translates every segment. Returns `202 { jobId, job }`; poll `GET
+re-translates every segment. `parseType: "segment" | "sentence"` (optional):
+how lessons the job parses are split (see `POST /lessons/:lessonId/parse`) —
+new lessons, changed scripts, and lessons parsed the other way **that have no
+translations or audio yet**; a lesson with work is kept as it is and listed
+in `progress.notes`. Omitted = each lesson keeps its own split. Returns
+`202 { jobId, job }`; poll `GET
 /jobs/:jobId`. `409 { jobId, job }` if that course + language already has
 an active job. `400` for `en`, `404` unknown course. Text only — never
 audio. CLI equivalent (no server): `npm run course:translate -- <courseId>

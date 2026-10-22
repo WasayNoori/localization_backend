@@ -1,10 +1,10 @@
 // src/services/translation/prepareCourseScripts.ts
 import { and, eq, inArray, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { lessons, lessonSegments, segmentTranslations, ttsClips } from "../../db/schema.js";
+import { lessons, lessonSegments, segmentTranslations, ttsClips, type SegmentGranularity } from "../../db/schema.js";
 import type { INlpService } from "../../interfaces/INlpService.js";
 import type { IScriptProofreader } from "../../interfaces/IScriptProofreader.js";
-import { parseLessonSegments } from "../parsing/parseLessonSegments.js";
+import { currentGranularity, parseLessonSegments } from "../parsing/parseLessonSegments.js";
 import { applyScriptCorrections } from "../proofreading/applyScriptCorrections.js";
 import { courseLessonOrder } from "./translateCourseLessons.js";
 
@@ -44,13 +44,17 @@ export interface PrepareScriptsResult {
  *     script means re-cutting its segments, which deletes them) — its fixes
  *     are reported instead.
  *  2. parse — every lesson with a script and no segments, or whose script
- *     changed and that has nothing to lose yet.
+ *     changed and that has nothing to lose yet. With `granularity`, lessons
+ *     are split that way; a lesson already parsed the other way is re-split
+ *     only if it has no translations or audio yet (otherwise it's reported —
+ *     switching it would delete that work; use the lesson's parse endpoint).
+ *     Without it, each lesson keeps the granularity it has.
  * Idempotent: a second run finds nothing left to do.
  */
 export async function prepareCourseScripts(
   deps: PrepareScriptsDeps,
   courseId: string,
-  options: { proofread: boolean; onLesson?: () => void | Promise<void> }
+  options: { proofread: boolean; granularity?: SegmentGranularity; onLesson?: () => void | Promise<void> }
 ): Promise<PrepareScriptsResult> {
   const { db } = deps;
   const result: PrepareScriptsResult = { proofread: 0, fixesApplied: 0, parsed: 0, review: [], issues: [] };
@@ -91,9 +95,18 @@ export async function prepareCourseScripts(
 
     const neverParsed = !lesson.parsedAt;
     const stale = !!lesson.parsedAt && !!lesson.scriptUpdatedAt && lesson.scriptUpdatedAt > lesson.parsedAt;
-    if (neverParsed || (stale && !(await hasLocalizedWork(db, lessonId)))) {
+    const current = neverParsed ? null : await currentGranularity(db, lessonId);
+    const otherSplit = !!options.granularity && current !== null && current !== options.granularity;
+    const mayReparse = (stale || otherSplit) && !(await hasLocalizedWork(db, lessonId));
+    if (otherSplit && !mayReparse) {
+      result.issues.push({
+        lessonId,
+        issue: `kept as ${current}s — it already has translations or audio, and switching to ${options.granularity}s would delete them (re-parse it on its lesson page to switch)`,
+      });
+    }
+    if (neverParsed || mayReparse) {
       try {
-        await parseLessonSegments({ db, nlpService: deps.nlpService }, lessonId);
+        await parseLessonSegments({ db, nlpService: deps.nlpService }, lessonId, { granularity: options.granularity });
         result.parsed++;
       } catch (err) {
         result.issues.push({ lessonId, issue: `parsing failed: ${err instanceof Error ? err.message : String(err)}` });

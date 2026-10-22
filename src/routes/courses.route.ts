@@ -351,7 +351,10 @@ export async function coursesRoute(app: FastifyInstance) {
           "missing or stale); (3) translates the scripts, lesson by lesson. Async — 202 { jobId }; poll " +
           "GET /jobs/:jobId (progress: phase, total, succeeded, failed, skipped, stats, review, notes). Jobs of " +
           "one course queue behind each other ('pending'). mode 'missing' (default) only fills what's missing, so " +
-          "re-running continues; 'all' re-translates every segment. Never generates audio. 409 (with the job) if " +
+          "re-running continues; 'all' re-translates every segment. parseType 'segment' | 'sentence': how lessons " +
+          "parsed by this job are split (a lesson already parsed the other way switches only if it has no " +
+          "translations or audio yet — otherwise it's listed in notes); omitted = each lesson keeps its own. " +
+          "Never generates audio. 409 (with the job) if " +
           "this course + language already has an active job; 400 for 'en'; 404 unknown course.",
         security: [{ apiKey: [] }],
         params: {
@@ -362,13 +365,21 @@ export async function coursesRoute(app: FastifyInstance) {
         body: {
           type: "object",
           additionalProperties: false,
-          properties: { mode: { type: "string", enum: ["missing", "all"] }, proofread: { type: "boolean" } },
+          properties: {
+            mode: { type: "string", enum: ["missing", "all"] },
+            proofread: { type: "boolean" },
+            parseType: { type: "string", enum: ["segment", "sentence"] },
+          },
         },
       },
     },
     async (request, reply) => {
       const { courseId, targetLanguage } = request.params as { courseId: string; targetLanguage: string };
-      const { mode, proofread } = (request.body ?? {}) as { mode?: CourseTranslationMode; proofread?: boolean };
+      const { mode, proofread, parseType } = (request.body ?? {}) as {
+        mode?: CourseTranslationMode;
+        proofread?: boolean;
+        parseType?: "segment" | "sentence";
+      };
       try {
         const job = await startCourseTranslationJob(
           {
@@ -381,7 +392,7 @@ export async function coursesRoute(app: FastifyInstance) {
           },
           courseId,
           targetLanguage,
-          { mode: mode ?? "missing", proofread: !!proofread }
+          { mode: mode ?? "missing", proofread: !!proofread, parseType }
         );
         return reply.code(202).send({ jobId: job.id, job });
       } catch (err) {

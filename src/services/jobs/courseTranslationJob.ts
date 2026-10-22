@@ -1,5 +1,6 @@
 // src/services/jobs/courseTranslationJob.ts
 import { and, eq, inArray } from "drizzle-orm";
+import type { SegmentGranularity } from "../../db/schema.js";
 import type { Database } from "../../db/client.js";
 import { processingJobs, type ProcessingJobProgress } from "../../db/schema.js";
 import type { INlpService } from "../../interfaces/INlpService.js";
@@ -24,6 +25,8 @@ export interface CourseTranslationOptions {
   mode?: CourseTranslationMode;
   /** Typo-check scripts (Claude) before parsing — scripts not checked yet only. */
   proofread?: boolean;
+  /** How lessons parsed by this job are split (see prepareCourseScripts). Omitted = each keeps its own. */
+  parseType?: SegmentGranularity;
 }
 
 export class JobConflictError extends Error {
@@ -88,7 +91,7 @@ export async function startCourseTranslationJob(
         failed: [],
         skipped: [],
         phase: "queued",
-        options: { mode: options.mode ?? "missing", proofread: String(!!options.proofread) },
+        options: { mode: options.mode ?? "missing", proofread: String(!!options.proofread), ...(options.parseType ? { parseType: options.parseType } : {}) },
       },
     })
     .returning();
@@ -109,6 +112,7 @@ async function runCourseTranslationJob(deps: CourseTranslationJobDeps, job: Proc
   const language = job.targetLanguage!;
   const mode = (job.progress.options?.mode as CourseTranslationMode | undefined) ?? "missing";
   const proofread = job.progress.options?.proofread === "true";
+  const parseType = job.progress.options?.parseType as SegmentGranularity | undefined;
   let progress: ProcessingJobProgress = { ...job.progress, notes: [], review: [] };
   const save = (status: string) =>
     db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
@@ -117,7 +121,7 @@ async function runCourseTranslationJob(deps: CourseTranslationJobDeps, job: Proc
     // 1. Scripts ready: typo check (optional) + parse what isn't parsed.
     progress = { ...progress, phase: proofread ? "checking scripts" : "preparing scripts" };
     await save("running");
-    const prep = await prepareCourseScripts(deps, job.targetId, { proofread });
+    const prep = await prepareCourseScripts(deps, job.targetId, { proofread, granularity: parseType });
     progress = {
       ...progress,
       stats: { proofread: prep.proofread, fixesApplied: prep.fixesApplied, parsed: prep.parsed },
