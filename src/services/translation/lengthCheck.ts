@@ -8,7 +8,9 @@
 const MIN_RATIO: Readonly<Record<string, number>> = { fr: 0.75, es: 0.75, it: 0.75, de: 0.75, pt: 0.75 };
 
 /** Short English (names, single words) varies too much to judge. */
-const MIN_SOURCE_CHARS = 40;
+// Shorter English is skipped: with one sentence per segment, a concise but correct translation
+// of a short line (e.g. 36 for 49 characters) often falls under the ratio.
+const MIN_SOURCE_CHARS = 60;
 
 /** A one-line reason when the translation looks truncated, else null. */
 export function lengthWarning(source: string, translation: string, language: string): string | null {

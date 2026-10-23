@@ -780,3 +780,10 @@ lost (no translations or audio in any language); otherwise the lesson is
 kept and named in the job's notes. Switching a translated lesson is a
 per-lesson, confirmed action on the lesson page, like any destructive
 re-parse.
+
+## Length check skips English under 60 characters (2026-10-23)
+Was 40. With sentence-level segments, short lines trip the 75% rule on
+correct, concise translations ("Let's take a look at an example of a basic
+sweep." → "Veamos un ejemplo de barrido básico.", 36 for 49). Truncation —
+the failure this guards against — shows up on longer text, so short lines
+are left to the translation review.
