@@ -1,4 +1,5 @@
 // src/services/audit/OutlineAuditCheck.ts
+import ExcelJS from "exceljs";
 import type { CourseAuditContext, CourseAuditFindings, ICourseAuditCheck } from "../../interfaces/ICourseAuditCheck.js";
 import { getCourseStructure, type CourseStructureLesson } from "../catalog/getCourseStructure.js";
 import { languageFolder, outlineFileName } from "../output/outputLayout.js";
@@ -7,7 +8,9 @@ import { languageFolder, outlineFileName } from "../output/outputLayout.js";
  * Translated languages only (English is the source): every outline item —
  * course name and description, section titles, lesson names and
  * descriptions — has a current translation (not stale), and the outline
- * workbook <LANG>/<courseId> Outline <LANG>.xlsx is in Box.
+ * workbook <LANG>/<courseId> Outline <LANG>.xlsx is in Box — and was saved
+ * after the translation: a workbook still showing English (its "not
+ * translated yet" note) fails too.
  */
 export class OutlineAuditCheck implements ICourseAuditCheck {
   readonly name = "Outline";
@@ -39,12 +42,37 @@ export class OutlineAuditCheck implements ICourseAuditCheck {
 
     const folderId = await box.findFolderPath(course.boxFolderId, [languageFolder(language)]);
     const name = outlineFileName(course.id, language);
-    const inBox = folderId ? (await box.listItems(folderId)).some((i) => i.type === "file" && i.name === name) : false;
-    if (!inBox) findings.problems.push(`${languageFolder(language)}/${name} not in Box — use "Excel to Box" on the course page`);
+    const file = folderId ? (await box.listItems(folderId)).find((i) => i.type === "file" && i.name === name) : undefined;
+    if (!file) {
+      findings.problems.push(`${languageFolder(language)}/${name} not in Box — use "Excel to Box" on the course page`);
+      return findings;
+    }
+    const english = await untranslatedNote(await box.getFileContent(file.id));
+    if (english) {
+      findings.problems.push(`${languageFolder(language)}/${name} in Box still shows English (${english}) — it was saved before the outline was translated; use "Excel to Box" again`);
+    }
     return findings;
   }
 }
 
 function list(items: string[], max = 8): string {
   return items.length > max ? `${items.slice(0, max).join(", ")} and ${items.length - max} more` : items.join(", ");
+}
+
+/** The workbook's own note on English fallback cells ("Red italic = not translated yet (12 cell(s)) …"), or null. */
+async function untranslatedNote(content: Buffer): Promise<string | null> {
+  const wb = new ExcelJS.Workbook();
+  try {
+    await wb.xlsx.load(content as unknown as ArrayBuffer);
+  } catch {
+    return "the file couldn't be read";
+  }
+  const sheet = wb.getWorksheet("Outline");
+  if (!sheet) return null;
+  let note: string | null = null;
+  sheet.eachRow((row) => {
+    const v = row.getCell(1).value;
+    if (typeof v === "string" && v.startsWith("Red italic = not translated yet")) note = v.match(/\((\d+) cell/)?.[1] ? `${v.match(/\((\d+) cell/)![1]} cells` : "some cells";
+  });
+  return note;
 }

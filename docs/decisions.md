@@ -787,3 +787,12 @@ correct, concise translations ("Let's take a look at an example of a basic
 sweep." → "Veamos un ejemplo de barrido básico.", 36 for 49). Truncation —
 the failure this guards against — shows up on longer text, so short lines
 are left to the translation review.
+
+## Outline workbook: only sent to Box once translated; the audit reads it (2026-10-23)
+25PDMStd's FR/ES/IT outline workbooks were saved to Box minutes before the
+outline translation ran, so every cell was the English fallback — and the
+audit passed, since it only checked the file existed. Now the console's
+"Excel to Box" is disabled (with the reason shown) until every outline item
+is translated and current in that language; the download stays for review.
+The audit opens the workbook and fails if its "not translated yet" note is
+there.
