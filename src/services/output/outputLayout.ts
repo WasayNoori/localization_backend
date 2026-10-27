@@ -27,6 +27,9 @@ export const lessonDirInCourse = (t: LessonInCourse): string[] => [languageFolde
 /** e.g. "French Segments.txt" — lives in the lesson folder. */
 export const segmentsFileName = (t: LessonInCourse): string => `${languageName(t.language)} Segments.txt`;
 
+/** e.g. "French Script.txt" — the full lesson script (no numbers), next to the segments file. */
+export const scriptFileName = (t: LessonInCourse): string => `${languageName(t.language)} Script.txt`;
+
 /** e.g. ["FR", "25Sim01_01", "French Clips"] */
 export const clipsDirInCourse = (t: LessonInCourse): string[] => [...lessonDirInCourse(t), `${languageName(t.language)} Clips`];
 
@@ -41,6 +44,13 @@ export const segmentsFilePath = (t: LessonOutputTarget): string[] => [
   segmentsFileName(t),
 ];
 
+/** e.g. ["SOLIDWORKS Simulation", "FR", "25Sim01_01", "French Script.txt"] */
+export const scriptFilePath = (t: LessonOutputTarget): string[] => [
+  ...courseFolderParts(t.courseFolder),
+  ...lessonDirInCourse(t),
+  scriptFileName(t),
+];
+
 /** e.g. [..., "French Clips", "25Sim01_01_fr_001.mp3"] */
 export const clipFilePath = (t: LessonOutputTarget, segmentNumber: number): string[] => [
   ...courseFolderParts(t.courseFolder),
@@ -51,6 +61,11 @@ export const clipFilePath = (t: LessonOutputTarget, segmentNumber: number): stri
 /** Segments file body: "001", the text, a blank line — numbers match the clip file names. CRLF for Windows editors. */
 export function formatSegmentsText(texts: string[]): string {
   return texts.map((text, i) => `${String(i + 1).padStart(3, "0")}\r\n${text}`).join("\r\n\r\n") + "\r\n";
+}
+
+/** Script file body: the segments in order as one continuous paragraph (joined by a space). CRLF ending. */
+export function formatScriptText(texts: string[]): string {
+  return texts.map((t) => t.trim()).filter(Boolean).join(" ") + "\r\n";
 }
 
 /** e.g. "25SWEssParts Outline ES.xlsx" — the course outline workbook, in the course's language folder. */

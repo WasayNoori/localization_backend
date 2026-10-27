@@ -2,7 +2,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import type { ILessonOutputStore, LessonOutputTarget } from "../../interfaces/ILessonOutputStore.js";
-import { clipFilePath, segmentsFilePath } from "./outputLayout.js";
+import { clipFilePath, scriptFilePath, segmentsFilePath } from "./outputLayout.js";
 
 /** Writes lesson outputs under a local root folder (LOCAL_OUTPUT_ROOT), in the course folder layout. */
 export class LocalFolderLessonOutputStore implements ILessonOutputStore {
@@ -14,6 +14,10 @@ export class LocalFolderLessonOutputStore implements ILessonOutputStore {
 
   writeSegmentsFile(target: LessonOutputTarget, content: string): Promise<string> {
     return this.write(segmentsFilePath(target), content);
+  }
+
+  writeScriptFile(target: LessonOutputTarget, content: string): Promise<string> {
+    return this.write(scriptFilePath(target), content);
   }
 
   writeClip(target: LessonOutputTarget, segmentNumber: number, audio: Buffer): Promise<string> {

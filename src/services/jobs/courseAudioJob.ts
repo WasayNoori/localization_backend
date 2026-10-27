@@ -36,7 +36,7 @@ export class CourseAudioJobError extends Error {
  * where it stopped. Writing each lesson's file right before its clips means a
  * lesson whose translation finished mid-run still gets one. `segmentsOnly`
  * writes the Segments.txt files and stops (no voice needed, no ElevenLabs,
- * no audit). Lessons not fully translated are skipped (no DeepL calls). One
+ * no audit); `scriptOnly` does the same with "<Language> Script.txt". Lessons not fully translated are skipped (no DeepL calls). One
  * active job per course + language (either kind — they write the same files).
  */
 /**
@@ -50,6 +50,8 @@ const courseAudioQueues = new Map<string, Promise<void>>();
 export interface CourseAudioJobOptions {
   /** Write the Segments.txt files only — no clips, no audit. */
   segmentsOnly?: boolean;
+  /** Write the Script.txt files only (full script, unnumbered) — no clips, no audit. */
+  scriptOnly?: boolean;
 }
 
 export async function startCourseAudioJob(
@@ -63,7 +65,9 @@ export async function startCourseAudioJob(
   if (!course) throw new CourseAudioJobError(404, `No course with id "${courseId}"`);
   if (!course.boxFolderId) throw new CourseAudioJobError(400, `Course "${courseId}" has no Box folder — set it on the course page`);
   // Fails here (400) for a language without a voice, rather than inside the job.
-  if (!options.segmentsOnly) await deps.voiceSettingsProvider.getSettings(language);
+  if (options.segmentsOnly && options.scriptOnly) throw new CourseAudioJobError(400, "Give segmentsOnly or scriptOnly, not both");
+  const textOnly: TextOnlyFile | null = options.segmentsOnly ? "segments" : options.scriptOnly ? "script" : null;
+  if (!textOnly) await deps.voiceSettingsProvider.getSettings(language);
 
   const [active] = await db
     .select()
@@ -89,13 +93,13 @@ export async function startCourseAudioJob(
       type: "generate",
       targetLanguage: language,
       status: "pending",
-      progress: { total, succeeded: [], failed: [], skipped: [], phase: "queued", options: { boxFolderId: course.boxFolderId, ...(options.segmentsOnly ? { segmentsOnly: "true" } : {}) } },
+      progress: { total, succeeded: [], failed: [], skipped: [], phase: "queued", options: { boxFolderId: course.boxFolderId, ...(textOnly ? { [`${textOnly}Only`]: "true" } : {}) } },
     })
     .returning();
 
   const boxFolderId = course.boxFolderId;
   const previous = courseAudioQueues.get(courseId) ?? Promise.resolve();
-  const mine = previous.then(() => runCourseAudioJob(deps, job, boxFolderId, options.segmentsOnly === true)).catch(() => {
+  const mine = previous.then(() => runCourseAudioJob(deps, job, boxFolderId, textOnly)).catch(() => {
     // runCourseAudioJob records its own failure.
   });
   courseAudioQueues.set(courseId, mine);
@@ -105,13 +109,17 @@ export async function startCourseAudioJob(
   return job;
 }
 
-async function runCourseAudioJob(deps: CourseAudioJobDeps, job: ProcessingJob, boxFolderId: string, segmentsOnly: boolean): Promise<void> {
+/** The text file a text-only job writes. */
+type TextOnlyFile = "segments" | "script";
+
+async function runCourseAudioJob(deps: CourseAudioJobDeps, job: ProcessingJob, boxFolderId: string, textOnly: TextOnlyFile | null): Promise<void> {
   const { db } = deps;
   const language = job.targetLanguage!;
+  const fileLabel = textOnly === "script" ? "Script.txt" : "Segments.txt";
   let progress: ProcessingJobProgress = {
     ...job.progress,
-    phase: segmentsOnly ? "writing Segments.txt" : "generating",
-    stats: segmentsOnly ? { segmentFiles: 0 } : { segmentFiles: 0, clips: 0, characters: 0 },
+    phase: textOnly ? `writing ${fileLabel}` : "generating",
+    stats: textOnly === "script" ? { scriptFiles: 0 } : textOnly ? { segmentFiles: 0 } : { segmentFiles: 0, clips: 0, characters: 0 },
   };
   const save = (status: string) =>
     db.update(processingJobs).set({ progress, status, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
@@ -125,12 +133,16 @@ async function runCourseAudioJob(deps: CourseAudioJobDeps, job: ProcessingJob, b
 
   try {
     await save("running");
-    if (segmentsOnly) {
-      const result = await writeSegments();
+    if (textOnly) {
+      const result =
+        textOnly === "script"
+          ? await writeCourseSegmentsFiles({ db, outputStore }, job.targetId, { languages: [language], courseFolder: job.targetId, file: "script" })
+          : await writeSegments();
+      if (textOnly === "script") progress.stats!.scriptFiles = result.written.length;
       progress = {
         ...progress,
         succeeded: result.written.map((w) => w.lessonId),
-        skipped: result.skipped.map((s) => ({ lessonId: s.lessonId, reason: `Segments.txt not written: ${s.reason}` })),
+        skipped: result.skipped.map((s) => ({ lessonId: s.lessonId, reason: `${fileLabel} not written: ${s.reason}` })),
         phase: "done",
       };
       await save("completed");

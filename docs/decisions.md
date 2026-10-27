@@ -796,3 +796,14 @@ audit passed, since it only checked the file existed. Now the console's
 is translated and current in that language; the download stays for review.
 The audit opens the workbook and fails if its "not translated yet" note is
 there.
+
+## Full lesson script as a text-only job option (2026-10-27)
+Each lesson also needs its full script (no segment numbers) as
+`<Language> Script.txt`, next to Segments.txt. Added as `scriptOnly` on the
+course generate endpoint, like `segmentsOnly` — same actor, a subset of the
+same job, same one-active-job rule; the console calls it in bulk per
+language. Body = the same texts as Segments.txt (same skip rules: not parsed /
+not fully translated → skipped, never a mixed-language file) joined by a
+space into one paragraph — segments carry no paragraph breaks to restore.
+Not written by normal audio runs and not required by the audit: it's an
+extra deliverable, not part of "done".

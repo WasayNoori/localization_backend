@@ -4,7 +4,7 @@ import type { Database } from "../../db/client.js";
 import { courses, lessonSegments, segmentTranslations } from "../../db/schema.js";
 import type { ILessonOutputStore } from "../../interfaces/ILessonOutputStore.js";
 import { courseLessonOrder } from "../translation/translateCourseLessons.js";
-import { courseFolderParts, formatSegmentsText } from "./outputLayout.js";
+import { courseFolderParts, formatScriptText, formatSegmentsText } from "./outputLayout.js";
 
 export interface WriteSegmentsResult {
   courseFolder: string;
@@ -27,11 +27,20 @@ export class WriteSegmentsError extends Error {
  * language ("en" = the English segments). A translated file is written only
  * when every segment has a translation, so a file never mixes languages.
  * Numbering (001, 002…) is the segment order and matches future clip names.
+ * `file: "script"` writes "<Language> Script.txt" instead — the same texts,
+ * same skip rules, as one unnumbered paragraph.
  */
 export async function writeCourseSegmentsFiles(
   deps: { db: Database; outputStore: ILessonOutputStore },
   courseId: string,
-  options: { languages: string[]; courseFolder?: string; /** Only these lessons (default: the whole course). */ lessonIds?: string[] }
+  options: {
+    languages: string[];
+    courseFolder?: string;
+    /** Only these lessons (default: the whole course). */
+    lessonIds?: string[];
+    /** Which file to write (default "segments"). */
+    file?: "segments" | "script";
+  }
 ): Promise<WriteSegmentsResult> {
   const { db } = deps;
   const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
@@ -72,7 +81,11 @@ export async function writeCourseSegmentsFiles(
         }
         texts = segments.map((s) => byId.get(s.id)!);
       }
-      const path = await deps.outputStore.writeSegmentsFile({ courseFolder, language, lessonId }, formatSegmentsText(texts));
+      const target = { courseFolder, language, lessonId };
+      const path =
+        options.file === "script"
+          ? await deps.outputStore.writeScriptFile(target, formatScriptText(texts))
+          : await deps.outputStore.writeSegmentsFile(target, formatSegmentsText(texts));
       result.written.push({ lessonId, language, segments: texts.length, path });
     }
   }

@@ -66,6 +66,9 @@ npm run audio:generate -- <courseId> "<courseFolder>" fr es it [--lessons a,b] [
 /courses/:courseId/localizations/:lang/generate`) runs the same thing as a
 job into the course's Box folder: Segments.txt for every lesson first, then
 the missing clips, with `BoxClipStore`. The CLI below remains for local runs.
+`{ scriptOnly: true }` on the same endpoint writes only each lesson's
+`<Language> Script.txt` (full script, one paragraph) — not part of a normal
+audio run and not checked by the audit.
 
 `generateCourseAudio` calls the lesson-level generate loop below for each
 lesson (languages in parallel, lessons one at a time) with a

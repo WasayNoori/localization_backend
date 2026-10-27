@@ -1,7 +1,7 @@
 // src/services/output/BoxLessonOutputStore.ts
 import type { IFileStorageService } from "../../interfaces/IFileStorageService.js";
 import type { ILessonOutputStore, LessonOutputTarget } from "../../interfaces/ILessonOutputStore.js";
-import { clipFileName, clipsDirInCourse, lessonDirInCourse, segmentsFileName } from "./outputLayout.js";
+import { clipFileName, clipsDirInCourse, lessonDirInCourse, scriptFileName, segmentsFileName } from "./outputLayout.js";
 
 /**
  * Lesson outputs in one course's Box folder — the same layout as the local
@@ -16,6 +16,10 @@ export class BoxLessonOutputStore implements ILessonOutputStore {
 
   writeSegmentsFile(target: LessonOutputTarget, content: string): Promise<string> {
     return this.write(lessonDirInCourse(target), segmentsFileName(target), Buffer.from(content, "utf8"));
+  }
+
+  writeScriptFile(target: LessonOutputTarget, content: string): Promise<string> {
+    return this.write(lessonDirInCourse(target), scriptFileName(target), Buffer.from(content, "utf8"));
   }
 
   writeClip(target: LessonOutputTarget, segmentNumber: number, audio: Buffer): Promise<string> {

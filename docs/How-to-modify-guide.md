@@ -53,7 +53,7 @@ re-translates). Column: `edited_at` on the three `*_translations` tables.
 
 ## To change the output folder layout / file names
 `src/services/output/outputLayout.ts` (folder + file names, Segments.txt
-format). Root: `LOCAL_OUTPUT_ROOT`. Language folder names:
+and Script.txt formats). Root: `LOCAL_OUTPUT_ROOT`. Language folder names:
 `src/config/languages.ts`. Box later = a new `ILessonOutputStore`
 implementation wired in `container.ts`.
 
@@ -69,7 +69,7 @@ applied automatically vs listed for review: `whyNotMechanical` in
 
 ## To change the Box folder layout or file names
 `services/output/outputLayout.ts` — `lessonDirInCourse`, `clipsDirInCourse`,
-`clipFileName`, `segmentsFileName` are shared by the local folder and Box.
+`clipFileName`, `segmentsFileName`, `scriptFileName` are shared by the local folder and Box.
 Box find-or-create and new-version uploads: `services/storage/BoxFileStorageService.ts`.
 
 ## To change where generated clips are saved
