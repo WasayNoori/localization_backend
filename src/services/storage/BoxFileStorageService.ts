@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { BoxCcgAuth, BoxClient, BoxDeveloperTokenAuth, CcgConfig } from "box-typescript-sdk-gen";
 import { generateByteStreamFromBuffer, readByteStream } from "box-typescript-sdk-gen/internal";
-import type { IFileStorageService, SaveAudioResult, StorageAccount, StoredItem } from "../../interfaces/IFileStorageService.js";
+import type { CopyOutcome, IFileStorageService, SaveAudioResult, StorageAccount, StoredItem } from "../../interfaces/IFileStorageService.js";
 import type { ISecretsProvider } from "../../interfaces/ISecretsProvider.js";
 
 // BoxApiError isn't part of box-typescript-sdk-gen's public export surface
@@ -118,7 +118,25 @@ export class BoxFileStorageService implements IFileStorageService {
   }
 
   async listItems(folderId: string): Promise<StoredItem[]> {
-    return [...(await this.listFolder(folderId))].map(([name, e]) => ({ id: e.id, name, type: e.type }));
+    return [...(await this.listFolder(folderId))].map(([name, e]) => ({ id: e.id, name, type: e.type, sha1: e.sha1 }));
+  }
+
+  async copyFile(source: StoredItem, folderId: string): Promise<{ fileId: string; outcome: CopyOutcome }> {
+    const children = await this.children(folderId);
+    const existing = children.get(source.name);
+    if (existing?.type === "file" && source.sha1 && existing.sha1 === source.sha1) return { fileId: existing.id, outcome: "unchanged" };
+    const client = await this.getClient();
+    if (existing?.type === "file") {
+      // Same name, different content → a new version of that file (Box can't copy onto an existing file).
+      const content = await this.getFileContent(source.id);
+      const result = await client.uploads.uploadFileVersion(existing.id, { attributes: { name: source.name }, file: generateByteStreamFromBuffer(content) });
+      const id = result.entries?.[0]?.id ?? existing.id;
+      children.set(source.name, { id, type: "file", sha1: source.sha1 });
+      return { fileId: id, outcome: "updated" };
+    }
+    const copied = await client.files.copyFile(source.id, { parent: { id: folderId } });
+    children.set(source.name, { id: copied.id, type: "file", sha1: source.sha1 });
+    return { fileId: copied.id, outcome: "copied" };
   }
 
   private async ensureChildFolder(parentId: string, name: string): Promise<string> {

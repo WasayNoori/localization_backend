@@ -16,7 +16,12 @@ export interface StoredItem {
   id: string;
   name: string;
   type: string; // "file" | "folder" (Box also has "web_link")
+  /** Content hash, for files (Box: SHA-1). Lets a copy skip identical content. */
+  sha1?: string;
 }
+
+/** What copyFile did. */
+export type CopyOutcome = "copied" | "updated" | "unchanged";
 
 export interface IFileStorageService {
   /** Legacy flat upload (one folder, file named by request id). Prefer ensureFolderPath + saveFile. */
@@ -35,6 +40,12 @@ export interface IFileStorageService {
   findFolderPath(rootFolderId: string, path: string[]): Promise<string | null>;
   /** The folder's items, read fresh from storage — for audits, which must see what's really there. */
   listItems(folderId: string): Promise<StoredItem[]>;
+  /**
+   * Copies a file (as listed by listItems) into a folder under its own name,
+   * server-side where storage allows. A file of that name already there gets a
+   * new version (same file id); identical content is left as is.
+   */
+  copyFile(source: StoredItem, folderId: string): Promise<{ fileId: string; outcome: CopyOutcome }>;
   /** The account the app is signed in as — a connectivity check. */
   whoAmI(): Promise<StorageAccount>;
 }
