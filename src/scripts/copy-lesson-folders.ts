@@ -1,6 +1,6 @@
 // src/scripts/copy-lesson-folders.ts
 //
-// TEMPORARY: copies each lesson's Segments.txt and clips, per language, from
+// TEMPORARY: copies each lesson's Segments.txt, Script.txt (when written) and clips, per language, from
 // <course>/<LANG>/<lessonId>/ into <course>/<lessonId>/ in the course's Box
 // folder (layout an outside automation needs for now). Server-side Box copies;
 // identical files are skipped, changed ones get a new version, so re-running

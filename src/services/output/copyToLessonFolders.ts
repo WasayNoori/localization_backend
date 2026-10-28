@@ -9,7 +9,7 @@ import type { Database } from "../../db/client.js";
 import { courses } from "../../db/schema.js";
 import type { CopyOutcome, IFileStorageService, StoredItem } from "../../interfaces/IFileStorageService.js";
 import { courseLessonOrder } from "../translation/translateCourseLessons.js";
-import { languageFolder, segmentsFileName } from "./outputLayout.js";
+import { languageFolder, scriptFileName, segmentsFileName } from "./outputLayout.js";
 
 export interface CopyToLessonFoldersOptions {
   /** Lower-case codes ("en", "es"). Default: every language folder the course has in Box. */
@@ -68,8 +68,12 @@ export async function copyToLessonFolders(
     const copyLesson = async (lesson: StoredItem) => {
       const items = await box.listItems(lesson.id);
       const files: { source: StoredItem; destPath: string[] }[] = [];
-      const segments = items.find((i) => i.type === "file" && i.name === segmentsFileName({ lessonId: lesson.name, language }));
-      if (segments) files.push({ source: segments, destPath: [lesson.name] });
+      // Text files sit in the lesson folder: Segments.txt and, when written, Script.txt.
+      const target = { lessonId: lesson.name, language };
+      for (const fileName of [segmentsFileName(target), scriptFileName(target)]) {
+        const file = items.find((i) => i.type === "file" && i.name === fileName);
+        if (file) files.push({ source: file, destPath: [lesson.name] });
+      }
       const clips = items.find((i) => i.type === "folder" && i.name === `${name} Clips`);
       if (clips) {
         for (const f of (await box.listItems(clips.id)).filter((i) => i.type === "file")) files.push({ source: f, destPath: [lesson.name, `${name} Clips`] });
