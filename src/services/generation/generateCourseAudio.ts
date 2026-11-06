@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { courses, segmentTranslations } from "../../db/schema.js";
 import { courseLessonOrder } from "../translation/translateCourseLessons.js";
-import { findMissingSegments } from "./findMissingSegments.js";
+import { currentVoiceIdFor, findMissingSegments } from "./findMissingSegments.js";
 import { generateLocalizationForLesson, type GenerateLocalizationDeps } from "./generateLocalizationForLesson.js";
 
 export interface CourseAudioOptions {
@@ -19,7 +19,7 @@ export interface CourseAudioOptions {
 
 export interface CourseAudioLessonResult {
   lessonId: string;
-  /** Segments that had no clip before this run. */
+  /** Segments that had no clip before this run (or one made with a voice changed since). */
   missing: number;
   /** Characters of those segments' text — what ElevenLabs bills. */
   characters: number;
@@ -39,7 +39,8 @@ export interface CourseAudioResult {
 /**
  * Generates missing audio for every lesson of a course in one language by
  * calling generateLocalizationForLesson per lesson (fan-out, no duplicated
- * logic). Lessons that aren't parsed or not fully translated are skipped —
+ * logic). Clips made with a voice changed in Settings since are redone too.
+ * Lessons that aren't parsed or not fully translated are skipped —
  * audio never triggers a DeepL call here. Resumable: re-running fills only
  * what's still missing.
  */
@@ -83,7 +84,9 @@ async function generateLessonAudio(
   options: CourseAudioOptions
 ): Promise<{ result: CourseAudioLessonResult; stopped: boolean }> {
   const base = { lessonId, missing: 0, characters: 0, generated: 0, errors: [] as CourseAudioLessonResult["errors"] };
-  const { segments, missingSegments } = await findMissingSegments(deps.db, lessonId, language);
+  // Clips made with a voice changed since count as missing — the lesson loop redoes them.
+  const voiceId = await currentVoiceIdFor(deps.voiceSettingsProvider, language);
+  const { segments, missingSegments } = await findMissingSegments(deps.db, lessonId, language, voiceId);
   if (!segments.length) return { result: { ...base, skipped: "not parsed" }, stopped: false };
   if (!missingSegments.length) return { result: { ...base, skipped: "audio complete" }, stopped: false };
 

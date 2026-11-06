@@ -335,8 +335,10 @@ name/description in this language with `stale` and `review`, or null) and its se
 `sourceText`, `translation` (`text`, `translatedAt`, `contextUsed`, or null),
 the current non-superseded `clip` (`id`, `qcStatus`, `qcIssues`, …, or
 null), a derived `status` (`not_translated` | `translated` | `audio_ready` |
-`qc_failed`) and `audioStale` (clip spoken from different text than the
-current translation). For `en` the source text is the translation. 404 if
+`qc_failed`), `audioStale` (clip spoken from different text than the
+current translation) and `voiceChanged` (clip made with a voice other than
+the language's current one — the next generate redoes it; false when the
+language has no voice set). For `en` the source text is the translation. 404 if
 the lesson doesn't exist. This is what the frontend's lesson page renders.
 
 ---
@@ -385,6 +387,13 @@ services from the container. Requires the lesson to already be parsed
 otherwise.
 
 Body: `{ boxFolderId, segmentId?, verifyBoxFiles?, force? }`.
+
+"Missing" includes segments whose active clip was made with a voice other
+than the language's current `voice_id` (voice changed in Settings): those
+clips are superseded and redone in the same pass, any language including
+`en`. Response `voiceChanged` = how many of `missingSegments` that was.
+`force` without `segmentId` regenerates every clip of the lesson in that
+language — the lesson page's "Regenerate all audio" (EN tab included).
 
 - `boxFolderId` — the Box folder generated clips upload into; snapshotted
   onto the `lesson_localizations` row the first time it's created for that

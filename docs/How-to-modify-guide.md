@@ -94,6 +94,9 @@ boundaries): `services/terms/termMatcher.ts`.
 In the console: Settings. API: `PUT /languages/:lang/voice-settings`.
 Starting values for new languages: `src/config/voice-defaults.ts`. Allowed
 ranges: `language-voice-settings.route.ts`.
+What counts as "made with an old voice" (redone by Generate missing audio):
+`findMissingSegments` in `src/services/generation/findMissingSegments.ts`
+(compares `tts_clips.voice_id` to the current voice).
 
 ## To change where parse reads the script from
 Start in: src/services/parsing/parseLessonSegments.ts (`loadScriptText`)

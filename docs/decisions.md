@@ -807,3 +807,16 @@ not fully translated → skipped, never a mixed-language file) joined by a
 space into one paragraph — segments carry no paragraph breaks to restore.
 Not written by normal audio runs and not required by the audit: it's an
 extra deliverable, not part of "done".
+
+## A changed voice makes old clips count as missing (2026-11-06)
+After fixing a language's voice id in Settings, the clips made with the old
+voice need redoing, but "generate missing" saw them as done and the only
+alternative was `force` (every clip). Now `findMissingSegments` takes the
+language's current `voice_id` and treats an active clip with a different
+one as missing — so the lesson generate, the course audio job and the
+course status endpoint all redo exactly those, any language including
+English. Compared on `voice_id` only: model/stability tweaks don't
+invalidate existing audio (use Regenerate all for that). Old-voice clips
+are superseded up front (one active clip per segment+language), so a failed
+regeneration leaves the segment missing until the next run, same as
+`force`. Course character estimates (`remaining` audio) don't count them yet.

@@ -9,6 +9,7 @@ import { generateLocalizationForLesson } from "../services/generation/generateLo
 import { parseLessonSegments } from "../services/parsing/parseLessonSegments.js";
 import { translateLessonSegments, TranslateLessonError } from "../services/translation/translateLessonSegments.js";
 import { getLessonLocalization } from "../services/catalog/getLessonLocalization.js";
+import { currentVoiceIdFor } from "../services/generation/findMissingSegments.js";
 import { defaultEmptyBody } from "./default-empty-body.js";
 
 export async function lessonsRoute(app: FastifyInstance) {
@@ -120,7 +121,8 @@ export async function lessonsRoute(app: FastifyInstance) {
         description:
           "Read-only: the lesson's segments side by side with their translation and current (non-superseded) " +
           "clip in one language, each with status (not_translated | translated | audio_ready | qc_failed) and " +
-          "audioStale (clip spoken from different text than the current translation). For 'en' the source text " +
+          "audioStale (clip spoken from different text than the current translation) and voiceChanged (clip made " +
+          "with a voice other than the language's current one — generate redoes it). For 'en' the source text " +
           "is the translation. 404 if the lesson doesn't exist.",
         security: [{ apiKey: [] }],
         params: {
@@ -132,7 +134,8 @@ export async function lessonsRoute(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { lessonId, language } = request.params as { lessonId: string; language: string };
-      const result = await getLessonLocalization(app.db, lessonId, language);
+      const voiceId = await currentVoiceIdFor(app.voiceSettingsProvider, language);
+      const result = await getLessonLocalization(app.db, lessonId, language, voiceId);
       if (!result) {
         return reply.code(404).send({ error: "NotFound", message: `No lesson with id "${lessonId}"` });
       }
@@ -207,12 +210,14 @@ export async function lessonsRoute(app: FastifyInstance) {
         description:
           "Resumable 'find what's missing' generate loop for one lesson + target language: translates " +
           "(DeepL, reusing any existing segment_translations row) and synthesizes audio (ElevenLabs) for " +
-          "every segment lacking an active tts_clips row, uploads to Box, and records the clip. " +
+          "every segment lacking an active tts_clips row — or whose clip was made with a voice other than the " +
+          "language's current one (voice changed in Settings) — uploads to Box, and records the clip. " +
           "Non-transactional per segment — one segment's failure is caught into errors[] rather than " +
           "aborting the rest, and re-calling this picks up exactly what's still missing. Requires the " +
           "lesson to already be parsed. To retranslate a single segment without paying for audio " +
           "regeneration, use POST /segments/:segmentId/translations/:targetLanguage/retranslate instead, " +
-          "then call this with segmentId + force once satisfied. Clips go to the course's Box folder " +
+          "then call this with segmentId + force once satisfied. force without segmentId regenerates every clip " +
+          "of the lesson in that language ('en' included). Result voiceChanged = how many were redone for a voice change. Clips go to the course's Box folder " +
           "(<LANG>/<lessonId>/<Language> Clips/); pass courseId when the lesson is in more than one course.",
         security: [{ apiKey: [] }],
         params: {

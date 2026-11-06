@@ -9,7 +9,7 @@ import {
 } from "../services/catalog/saveCourseDetails.js";
 import { eq } from "drizzle-orm";
 import { courses, courseLessons, lessons } from "../db/schema.js";
-import { findMissingSegments } from "../services/generation/findMissingSegments.js";
+import { currentVoiceIdFor, findMissingSegments } from "../services/generation/findMissingSegments.js";
 import {
   importCourseStructure,
   CourseImportValidationError,
@@ -623,7 +623,7 @@ export async function coursesRoute(app: FastifyInstance) {
           "Read-only completeness report for a course + target language — no DeepL/ElevenLabs calls, no " +
           "writes. For each lesson in the course, reports whether every segment has an active tts_clips " +
           "row for this language (via the same findMissingSegments query generateLocalizationForLesson " +
-          "uses) and how many are still missing. courseComplete is true iff every lesson is complete " +
+          "uses — a clip made with a voice other than the language's current one counts as missing) and how many are still missing. courseComplete is true iff every lesson is complete " +
           "(vacuously true for a course with no lessons, matching a lesson with no segments being " +
           "vacuously complete). 404 if courseId doesn't exist.",
         security: [{ apiKey: [] }],
@@ -655,9 +655,11 @@ export async function coursesRoute(app: FastifyInstance) {
         .where(eq(courseLessons.courseId, courseId))
         .orderBy(courseLessons.position, lessons.id);
 
+      // Clips made with a voice changed since count as missing, as in generate.
+      const voiceId = await currentVoiceIdFor(app.voiceSettingsProvider, targetLanguage);
       const lessonStatuses = await Promise.all(
         lessonRows.map(async ({ lessonId }) => {
-          const { missingSegments } = await findMissingSegments(app.db, lessonId, targetLanguage);
+          const { missingSegments } = await findMissingSegments(app.db, lessonId, targetLanguage, voiceId);
           return {
             lessonId,
             complete: missingSegments.length === 0,

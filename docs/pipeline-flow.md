@@ -131,7 +131,12 @@ called by the course-level fan-out above.
    same query. `force` short-circuits this by superseding every active clip
    in scope up front (DB-only; just that segment's clip when `segmentId` is
    given), so everything in scope counts as missing this pass —
-   for intentional full regeneration, not drift recovery. `verifyBoxFiles`
+   for intentional full regeneration, not drift recovery. An active clip
+   whose `voice_id` isn't the language's current voice (changed in Settings
+   since) also counts as missing: it's superseded up front and redone by
+   the same loop, with or without `force`, English included. The course
+   audio job and the course status endpoint use the same rule.
+   `verifyBoxFiles`
    (skipped if `force` is set) instead checks each active clip's Box file
    still exists, superseding only the ones that don't.
 3. For each missing segment:

@@ -49,6 +49,8 @@ export interface GenerateLocalizationResult {
   targetLanguage: string;
   totalSegments: number;
   missingSegments: number;
+  /** Of missingSegments: clips that existed but were made with a voice other than the language's current one. */
+  voiceChanged: number;
   succeeded: string[];
   errors: { segmentId: string; error: string }[];
   /** True when shouldStop ended the run early. */
@@ -87,6 +89,8 @@ export interface GenerateLocalizationOptions {
  * recorded, never blocking the rest. See docs/pipeline-flow.md for the
  * full query-loop writeup.
  * Basically, we give this a single lesson and it generates missing clips.
+ * "Missing" includes clips made with a voice other than the language's
+ * current one (voice changed in Settings) — those are redone too.
  */
 export async function generateLocalizationForLesson(
   deps: GenerateLocalizationDeps,
@@ -96,32 +100,47 @@ export async function generateLocalizationForLesson(
 ): Promise<GenerateLocalizationResult> {
   const { db } = deps;
 
-  const { segments, activeClips } = await findMissingSegments(db, lessonId, targetLanguage);
+  // Throws VoiceNotConfiguredError for a language without a voice — never a silent default.
+  const voiceSettingsRow = await deps.voiceSettingsProvider.getSettings(targetLanguage);
+
+  // Clips made with another voice (changed in Settings since) count as missing.
+  const { segments, activeClips, voiceChangedClips } = await findMissingSegments(
+    db,
+    lessonId,
+    targetLanguage,
+    voiceSettingsRow.voiceId
+  );
 
   if (segments.length === 0) {
-    return { lessonId, targetLanguage, totalSegments: 0, missingSegments: 0, succeeded: [], errors: [] };
+    return { lessonId, targetLanguage, totalSegments: 0, missingSegments: 0, voiceChanged: 0, succeeded: [], errors: [] };
   }
 
   const activeSegmentIds = new Set(activeClips.map((c) => c.segmentId));
 
-  // force/verifyBoxFiles act only on the segments in scope: with segmentId,
-  // just that one segment's clip — never the rest of the lesson's audio.
-  const clipsInScope = options.segmentId
-    ? activeClips.filter((c) => c.segmentId === options.segmentId)
-    : activeClips;
+  // force/verifyBoxFiles/voice changes act only on the segments in scope:
+  // with segmentId, just that one segment's clip — never the rest of the lesson's audio.
+  const inScope = <T extends { segmentId: string }>(clips: T[]) =>
+    options.segmentId ? clips.filter((c) => c.segmentId === options.segmentId) : clips;
+  const supersede = (clipId: string) => db.update(ttsClips).set({ qcStatus: "superseded" }).where(eq(ttsClips.id, clipId));
+
+  // Old-voice clips are superseded up front (the partial unique index allows
+  // one active clip per segment+language) and regenerate through the normal
+  // missing-segment loop below, like force.
+  const voiceChangedInScope = inScope(voiceChangedClips);
+  for (const clip of voiceChangedInScope) await supersede(clip.id);
 
   if (options.force) {
     // Regenerate everything in scope regardless of current state — supersede
     // those active clips up front, DB-only, no Box calls. They flow into
     // missingSegments below through the exact same path as any other
     // missing segment, no separate "force regenerate" branch below.
-    for (const clip of clipsInScope) {
-      await db.update(ttsClips).set({ qcStatus: "superseded" }).where(eq(ttsClips.id, clip.id));
+    for (const clip of inScope(activeClips)) {
+      await supersede(clip.id);
       activeSegmentIds.delete(clip.segmentId);
     }
   } else if (options.verifyBoxFiles) {
     if (!deps.fileStorageService) throw new Error("verifyBoxFiles needs a file storage service");
-    for (const clip of clipsInScope) {
+    for (const clip of inScope(activeClips)) {
       if (!clip.boxFileId) {
         continue;
       }
@@ -130,7 +149,7 @@ export async function generateLocalizationForLesson(
         // Supersede the stale row and drop it from the active set — it now
         // flows into missingSegments below and regenerates through the
         // exact same per-segment loop as everything else, no separate path.
-        await db.update(ttsClips).set({ qcStatus: "superseded" }).where(eq(ttsClips.id, clip.id));
+        await supersede(clip.id);
         activeSegmentIds.delete(clip.segmentId);
       }
     }
@@ -145,8 +164,6 @@ export async function generateLocalizationForLesson(
   const segmentIndexById = new Map(segments.map((s, index) => [s.id, index]));
   const lessonContext = buildLessonContext(segments);
 
-  // Throws VoiceNotConfiguredError for a language without a voice — never a silent default.
-  const voiceSettingsRow = await deps.voiceSettingsProvider.getSettings(targetLanguage);
   const lessonLocalization = await getOrCreateLessonLocalization(deps, lessonId, targetLanguage);
 
   const succeeded: string[] = [];
@@ -246,6 +263,7 @@ export async function generateLocalizationForLesson(
     targetLanguage,
     totalSegments: segments.length,
     missingSegments: missingSegments.length,
+    voiceChanged: voiceChangedInScope.length,
     succeeded,
     errors,
     stopped,

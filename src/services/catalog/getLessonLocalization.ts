@@ -19,6 +19,8 @@ export interface SegmentLocalization {
   status: SegmentLocalizationStatus;
   /** The clip was spoken from different text than the current translation. */
   audioStale: boolean;
+  /** The clip was made with a voice other than the language's current one — Generate audio redoes it. */
+  voiceChanged: boolean;
 }
 
 export interface LessonLocalization {
@@ -47,12 +49,14 @@ export interface LessonLocalization {
 /**
  * Read-only: one lesson's segments side by side with their translation and
  * current clip in one language, with a derived per-segment status. Null if
- * the lesson doesn't exist.
+ * the lesson doesn't exist. `currentVoiceId` (the language's voice now; null
+ * = none set) drives voiceChanged.
  */
 export async function getLessonLocalization(
   db: Database,
   lessonId: string,
-  language: string
+  language: string,
+  currentVoiceId: string | null = null
 ): Promise<LessonLocalization | null> {
   const [lesson] = await db.select().from(lessons).where(eq(lessons.id, lessonId)).limit(1);
   if (!lesson) return null;
@@ -136,6 +140,7 @@ export async function getLessonLocalization(
         clip,
         status,
         audioStale: !!(c && translation && c.sentenceText !== translation.text),
+        voiceChanged: !!(c && currentVoiceId && c.voiceId !== currentVoiceId),
       };
     }),
   };
