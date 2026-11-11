@@ -5,16 +5,22 @@ import type {
   SynthesizeSpeechRequest,
   SynthesizeSpeechResult,
   TtsModel,
+  TtsUsage,
   TtsVoice,
 } from "../../interfaces/ITextToSpeechService.js";
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io";
+
+// The UI polls usage; one upstream call per minute is plenty.
+const USAGE_CACHE_MS = 60_000;
 
 // Models that accept language_code (force the spoken language). Multilingual v2
 // doesn't and may reject the request, so it's only sent for these.
 const LANGUAGE_CODE_MODELS = /^eleven_(v3|v4|flash_v2_5|turbo_v2_5)/;
 
 export class ElevenLabsTtsService implements ITextToSpeechService {
+  private usageCache: { value: TtsUsage; expiresAt: number } | null = null;
+
   constructor(private readonly secretsProvider: ISecretsProvider) {}
 
   async synthesize(request: SynthesizeSpeechRequest): Promise<SynthesizeSpeechResult> {
@@ -89,6 +95,26 @@ export class ElevenLabsTtsService implements ITextToSpeechService {
     return body
       .filter((m) => m.can_do_text_to_speech !== false)
       .map((m) => ({ modelId: m.model_id, name: m.name, languages: (m.languages ?? []).map((l) => l.language_id.toLowerCase()) }));
+  }
+
+  async getUsage(): Promise<TtsUsage> {
+    if (this.usageCache && Date.now() < this.usageCache.expiresAt) return this.usageCache.value;
+    const s = (await this.get("/v1/user/subscription")) as {
+      character_count: number;
+      character_limit: number;
+      next_character_count_reset_unix?: number | null;
+      tier?: string;
+    };
+    const value: TtsUsage = {
+      used: s.character_count,
+      limit: s.character_limit,
+      remaining: Math.max(0, s.character_limit - s.character_count),
+      resetsAt: s.next_character_count_reset_unix ? new Date(s.next_character_count_reset_unix * 1000).toISOString() : null,
+      tier: s.tier ?? null,
+      fetchedAt: new Date().toISOString(),
+    };
+    this.usageCache = { value, expiresAt: Date.now() + USAGE_CACHE_MS };
+    return value;
   }
 
   private async get(path: string): Promise<unknown> {

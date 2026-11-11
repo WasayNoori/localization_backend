@@ -273,6 +273,12 @@ To actually regenerate a lesson with the new voice, call this first, then
 `POST /lessons/:lessonId/localizations/:targetLanguage/generate` with
 `force: true`.
 
+`GET /tts/usage` returns the ElevenLabs character quota for the current
+billing period: `{ used, limit, remaining, resetsAt, tier, fetchedAt }`
+(`resetsAt` ISO or null). Cached in `ElevenLabsTtsService` for 60s, so UI
+polling doesn't hit ElevenLabs more than once a minute; `fetchedAt` says how
+old the snapshot is. 502 if ElevenLabs can't be reached.
+
 ---
 
 ## `PUT /languages/:targetLanguage/glossary`

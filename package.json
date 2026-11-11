@@ -15,7 +15,8 @@
     "course:translate": "tsx --env-file-if-exists=.env src/scripts/translate-course.ts",
     "outputs:segments": "tsx --env-file-if-exists=.env src/scripts/write-segments.ts",
     "audio:generate": "tsx --env-file-if-exists=.env src/scripts/generate-audio.ts",
-    "box:lesson-folders": "tsx --env-file-if-exists=.env src/scripts/copy-lesson-folders.ts"
+    "box:lesson-folders": "tsx --env-file-if-exists=.env src/scripts/copy-lesson-folders.ts",
+    "french:import": "tsx --env-file-if-exists=.env src/scripts/import-french-segments.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

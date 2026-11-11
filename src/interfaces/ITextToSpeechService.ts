@@ -49,10 +49,25 @@ export interface TtsModel {
   languages: string[];
 }
 
+export interface TtsUsage {
+  /** Characters used in the current billing period. */
+  used: number;
+  limit: number;
+  remaining: number;
+  /** ISO timestamp of the next quota reset; null if the provider doesn't say. */
+  resetsAt: string | null;
+  /** Subscription tier, e.g. "creator". */
+  tier: string | null;
+  /** When this snapshot was fetched from the provider (ISO); usage may be cached briefly. */
+  fetchedAt: string;
+}
+
 export interface ITextToSpeechService {
   synthesize(request: SynthesizeSpeechRequest): Promise<SynthesizeSpeechResult>;
   /** Voices available to the account. */
   listVoices(): Promise<TtsVoice[]>;
   /** Text-to-speech models available to the account. */
   listModels(): Promise<TtsModel[]>;
+  /** Character quota for the current billing period. May be cached for up to a minute. */
+  getUsage(): Promise<TtsUsage>;
 }

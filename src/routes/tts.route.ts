@@ -77,4 +77,24 @@ export async function ttsRoute(app: FastifyInstance) {
       }
     }
   );
+
+  app.get(
+    "/tts/usage",
+    {
+      schema: {
+        description:
+          "ElevenLabs character quota for the current billing period: used, limit, remaining, resetsAt (ISO, " +
+          "null if unknown), tier, fetchedAt. Cached server-side for 60s. 502 if ElevenLabs can't be reached.",
+        security: [{ apiKey: [] }],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return reply.send(await app.ttsService.getUsage());
+      } catch (err) {
+        request.log.error(err, "ElevenLabs usage failed");
+        return reply.code(502).send({ error: "UpstreamError", message: err instanceof Error ? err.message : "Unknown error" });
+      }
+    }
+  );
 }
