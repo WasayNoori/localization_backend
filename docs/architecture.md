@@ -94,7 +94,7 @@ only as a fallback for lessons with no `script_text` in the DB.
 
 **Azure Key Vault** handles secrets management, abstracted behind
 `ISecretsProvider` so the rest of the codebase never knows whether it's
-talking to Key Vault or a local dummy provider.
+talking to Key Vault or the local `.secrets.local.json` file.
 
 ---
 

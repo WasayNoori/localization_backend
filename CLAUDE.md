@@ -11,7 +11,7 @@ what's specific to this repo.
   concrete implementations exclusively in `plugins/container.ts` (the
   composition root) — never instantiate concrete classes elsewhere.
 - **Secrets never in `process.env`/envSchema.** All secrets go through
-  `ISecretsProvider` (`DummySecretsProvider` locally,
+  `ISecretsProvider` (`LocalFileSecretsProvider` + `.secrets.local.json` locally,
   `AzureKeyVaultSecretsProvider` in production).
 - **Build the real thing incrementally.** No throwaway stubs, no placeholder
   names that will need renaming later. If something is genuinely interim

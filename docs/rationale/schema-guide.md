@@ -281,6 +281,8 @@ of whether audio has been generated yet.
 | `deepl_glossary_id`  | text, null  | Snapshot of the glossary ID used, from `glossaries` at translation time|
 | `context_used`       | text, null  | Snapshot of the DeepL `context` param sent, if any                     |
 | `billed_characters`  | integer, null | From DeepL's response, for cost tracking                             |
+| `length_warning`     | text, null  | Still looked truncated after retries — not voiced. Null = ok           |
+| `edited_at`          | timestamptz, null | Hand override (`PUT /segments/:id/translations/:lang`). Kept by the course translation; replaced by retranslate. Null = DeepL's text |
 | `created_at`         | timestamptz | default `now()`                                                        |
 
 **Why this exists as its own table:** lets you re-run TTS from an existing

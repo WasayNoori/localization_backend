@@ -1,0 +1,1 @@
+ALTER TABLE "segment_translations" ADD COLUMN "edited_at" timestamp with time zone;

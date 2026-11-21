@@ -1,5 +1,5 @@
 // src/services/translation/translateLessonSegments.ts
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { lessons, segmentTranslations, ttsClips } from "../../db/schema.js";
 import type { ITermSenseResolver } from "../../interfaces/ITermSenseResolver.js";
@@ -16,6 +16,8 @@ export interface TranslateLessonDeps extends TranslateScaffoldingDeps {
 export interface TranslateLessonOptions {
   /** Restrict to these segments of the lesson (e.g. a UI multi-select). Default: every segment. */
   segmentIds?: string[];
+  /** Leave hand-overridden translations (edited_at set) as they are. Default false: an explicit lesson translate replaces them. */
+  keepEdited?: boolean;
 }
 
 export interface TranslateLessonResult {
@@ -89,8 +91,11 @@ export async function translateLessonSegments(
   const errors: { segmentId: string; error: string }[] = [];
   const lengthWarnings: TranslateLessonResult["lengthWarnings"] = [];
 
+  const edited = options.keepEdited ? await editedSegmentIds(db, segments.map((s) => s.id), targetLanguage) : new Set<string>();
+
   for (const [index, segment] of segments.entries()) {
     if (wanted && !wanted.has(segment.id)) continue;
+    if (edited.has(segment.id)) continue;
     try {
       const r = await translateAndStoreSegment(deps, segment.id, segment.text, targetLanguage, context.forIndex(index));
       translated.push(segment.id);
@@ -120,6 +125,20 @@ export async function translateLessonSegments(
 }
 
 export class TranslateLessonError extends Error {}
+
+async function editedSegmentIds(db: Database, segmentIds: string[], targetLanguage: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ segmentId: segmentTranslations.segmentId })
+    .from(segmentTranslations)
+    .where(
+      and(
+        eq(segmentTranslations.targetLanguage, targetLanguage),
+        inArray(segmentTranslations.segmentId, segmentIds),
+        isNotNull(segmentTranslations.editedAt)
+      )
+    );
+  return new Set(rows.map((r) => r.segmentId));
+}
 
 async function findStaleAudio(db: Database, segmentIds: string[], targetLanguage: string): Promise<string[]> {
   if (segmentIds.length === 0) return [];

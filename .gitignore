@@ -70,7 +70,7 @@ web_modules/
 .env.*
 !.env.example
 
-# local real secrets for SECRETS_PROVIDER=dummy (see dummySecretsProvider.ts)
+# local secrets for SECRETS_PROVIDER=local (see localFileSecretsProvider.ts)
 .secrets.local.json
 
 # parcel-bundler cache (https://parceljs.org/)

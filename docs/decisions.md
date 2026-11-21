@@ -820,3 +820,28 @@ invalidate existing audio (use Regenerate all for that). Old-voice clips
 are superseded up front (one active clip per segment+language), so a failed
 regeneration leaves the segment missing until the next run, same as
 `force`. Course character estimates (`remaining` audio) don't count them yet.
+
+## Hand override for segment translations (2026-11-16)
+The length check ("Length check on every DeepL result") is a heuristic with
+no way to overrule it. 26SWSurf05_05 #9 (IT): "Cliccherò sul pulsante OK e le
+facce saranno state unite." is correct but 57 characters for 80 of English
+(needs 60), so it carried `length_warning`, audio refused it, and retranslate
+returned the same text — stuck. Added `PUT /segments/:id/translations/:lang`:
+a person's text (or DeepL's, sent back to accept it) is stored with
+`length_warning` cleared and `edited_at` set. Same pattern as scaffolding hand
+corrections: the course translation (both modes) keeps edited rows; an
+explicit retranslate/lesson translate replaces them, since that's someone
+asking for DeepL's text. Chose an override over lowering the `it` ratio — a
+lower ratio only moves the dead end. Custom DeepL instructions on retranslate
+were considered and left for later.
+
+## Secrets: one local file in dev, Key Vault in prod — no hard-coded fallback
+Supersedes "Local real secrets in a git-ignored file". `DummySecretsProvider`
+(a hard-coded map in source, overlaid by `.secrets.local.json`) is replaced
+by `LocalFileSecretsProvider`, which reads only `.secrets.local.json` and
+fails fast if the file or a requested name is missing. `SECRETS_PROVIDER` is
+now `local | azure-key-vault` (was `dummy`). Two sources, picked by one env
+var: the layered fallback hid which value was actually in use and kept real
+keys committed. The previously hard-coded values (ElevenLabs, DeepL, DB
+connection string, Box token) were moved into the local file; they remain in
+git history and must be rotated.

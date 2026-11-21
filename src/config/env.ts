@@ -3,7 +3,7 @@ import { z } from "zod";
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default("0.0.0.0"),
-  SECRETS_PROVIDER: z.enum(["dummy", "azure-key-vault"]).default("dummy"),
+  SECRETS_PROVIDER: z.enum(["local", "azure-key-vault"]).default("local"),
   KEY_VAULT_URL: z.string().optional(),
   SPACY_SERVICE_URL: z.string(),
   // Default Box folder for generated audio until the Box structure is

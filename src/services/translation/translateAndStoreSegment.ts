@@ -50,6 +50,8 @@ export async function translateAndStoreSegment(
     billedCharacters: null,
     termGuidance: guidance.length ? guidance : null,
     lengthWarning,
+    // DeepL's text replaces any hand override.
+    editedAt: null,
     // No updated_at column: created_at records when THIS translation was produced.
     createdAt: new Date(),
   };

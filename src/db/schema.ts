@@ -314,6 +314,11 @@ export const segmentTranslations = pgTable(
     // English) after the length-check retries. Audio isn't generated from it,
     // and the course translation's "missing" mode tries it again. Null = ok.
     lengthWarning: text("length_warning"),
+    // Set when a person supplied (or accepted) this text via the override
+    // endpoint — it isn't DeepL output and no warning applies. The course
+    // translation leaves these alone; an explicit segment/lesson
+    // re-translation replaces them (and clears this). Null = DeepL's text.
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

@@ -7,7 +7,7 @@ import { KEY_VAULT_SECRET_NAMES } from "../config/key-vault-names.js";
 import type { ISecretsProvider } from "../interfaces/index.js";
 import { AzureKeyVaultSecretsProvider } from "../services/secrets/azureKeyVaultSecretsProvider.js";
 import { CachingSecretsProvider } from "../services/secrets/cachingSecretsProvider.js";
-import { DummySecretsProvider } from "../services/secrets/dummySecretsProvider.js";
+import { LocalFileSecretsProvider } from "../services/secrets/localFileSecretsProvider.js";
 
 export function buildSecretsProvider(): ISecretsProvider {
   if (env.SECRETS_PROVIDER === "azure-key-vault") {
@@ -16,5 +16,5 @@ export function buildSecretsProvider(): ISecretsProvider {
     }
     return new CachingSecretsProvider(new AzureKeyVaultSecretsProvider(env.KEY_VAULT_URL, KEY_VAULT_SECRET_NAMES));
   }
-  return new CachingSecretsProvider(new DummySecretsProvider());
+  return new CachingSecretsProvider(new LocalFileSecretsProvider());
 }

@@ -495,6 +495,27 @@ audio once satisfied with the new translation, call
 
 ---
 
+## `PUT /segments/:segmentId/translations/:targetLanguage`
+
+Sync — segment-level hand override. Thin route; logic in
+`overrideSegmentTranslation` (`src/services/translation/overrideSegmentTranslation.ts`).
+Body `{ translatedText }`. Stores the text as the `segment_translations` row
+(no DeepL call), clears `length_warning` and sets `edited_at`. The way out
+when DeepL's text is right but the length check flags it (retranslate just
+returns the same text), or when DeepL is wrong and a person has the fix. Send
+DeepL's existing text back to accept it as is. Returns `{ segmentId,
+targetLanguage, translatedText, editedAt, hasActiveAudio }`. 400 for `"en"`
+or empty text, 404 for an unknown segment.
+
+The course translation (`missing` and `all`) leaves edited rows alone;
+`retranslate` and the lesson translate replace them with DeepL's text
+(clearing `edited_at`). Never touches `tts_clips` — regenerate audio with
+`POST /lessons/:lessonId/localizations/:targetLanguage/generate` +
+`segmentId` + `force: true`. `GET` lesson localization shows `editedAt` on
+each segment's translation.
+
+---
+
 ## `GET /clips/:clipId/audio`
 
 Sync — streams one clip's audio bytes from Box through the API

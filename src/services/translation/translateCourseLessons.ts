@@ -10,6 +10,7 @@ import { translateLessonSegments, type TranslateLessonDeps } from "./translateLe
  * missing: only segments with no translation in this language, or translated
  * under a different formality than the language's current setting (stale).
  * all: every segment again.
+ * Either way, hand overrides (segment_translations.edited_at) are kept.
  */
 export type CourseTranslationMode = "missing" | "all";
 
@@ -75,7 +76,11 @@ export async function translateCourseLessons(
         // Whole-lesson call when everything is wanted (also fills missing lesson
         // titles); only the missing segments otherwise.
         const partial = mode === "missing" && untranslated.length < all.length;
-        const result = await translateLessonSegments(deps, lessonId, targetLanguage, partial ? { segmentIds: untranslated } : {});
+        // keepEdited: hand overrides survive even mode "all".
+        const result = await translateLessonSegments(deps, lessonId, targetLanguage, {
+          keepEdited: true,
+          ...(partial ? { segmentIds: untranslated } : {}),
+        });
         if (result.lengthWarnings.length) lengthWarnings.push({ lessonId, count: result.lengthWarnings.length });
         if (result.errors.length) {
           progress.failed.push({
@@ -124,6 +129,7 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
           formality: segmentTranslations.formality,
           termGuidance: segmentTranslations.termGuidance,
           lengthWarning: segmentTranslations.lengthWarning,
+          editedAt: segmentTranslations.editedAt,
         })
         .from(segmentTranslations)
         .where(
@@ -139,11 +145,13 @@ async function segmentState(db: Database, lessonId: string, targetLanguage: stri
       // never redone automatically — term changes apply to new translations only;
       // re-translate a lesson or segment by hand to apply them to older ones.
       // A translation flagged as truncated is tried again.
+      // A hand override (edited_at) is always done — a person's word wins.
       .filter(
         (r) =>
-          r.formality === formality &&
+          r.editedAt !== null ||
+          (r.formality === formality &&
           !r.lengthWarning &&
-          (r.termGuidance === null || sameGuidance(r.termGuidance, guidance.get(r.segmentId)))
+          (r.termGuidance === null || sameGuidance(r.termGuidance, guidance.get(r.segmentId))))
       )
       .map((r) => r.segmentId)
   );

@@ -120,6 +120,13 @@
       "when": 1792704240654,
       "tag": "0016_segment_granularity",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794869145627,
+      "tag": "0017_segment_translation_override",
+      "breakpoints": true
     }
   ]
 }

@@ -33,7 +33,8 @@ Model: `ANTHROPIC_REVIEW_MODEL` env var; key: `anthropic-api-key` secret
 
 ## To add or rename a Key Vault secret
 `src/config/key-vault-names.ts`: logical name → vault name. Locally, also
-add any new logical name to `DummySecretsProvider` / `.secrets.local.json`.
+add the logical name to `.secrets.local.json` (and an empty entry in
+`.secrets.local.example.json`).
 
 ## After uploading a DeepL glossary (or for a new language)
 `npm run glossaries:sync -- --dry-run`, then without `--dry-run` (or
@@ -45,6 +46,11 @@ from DeepL — nothing to configure. Rule lives in
 Copy `.secrets.local.example.json` to `.secrets.local.json` (git-ignored) and
 add `"<logical name>": "<value>"` — e.g. `anthropic-api-key`. Restart the
 server; the file is read once at startup.
+
+## To change how hand overrides of segment translations work
+- Write: `src/services/translation/overrideSegmentTranslation.ts` (route in `segments.route.ts`).
+- What keeps them: `keepEdited` in `translateLessonSegments.ts`, and `segmentState` in `translateCourseLessons.ts`.
+- What replaces them: `translateAndStoreSegment.ts` sets `editedAt: null`.
 
 ## To change how hand corrections to scaffolding work
 `src/services/translation/correctScaffolding.ts` (validation + write) and
